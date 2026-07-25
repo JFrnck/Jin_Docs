@@ -437,7 +437,7 @@ Escritos el 2026-07-25, con las Fases 1-4 ya mergeadas. Desviaciones del BLUEPRI
 - `Yormun_Web` y `Yormun_CLI` son los templates de scaffolding **sin tocar** desde Fase 2.1.
 - `Yormun_Infra` tiene la base (Postgres, Redis, Traefik, cloudflared, observabilidad, backups, RBAC del Executor) pero **ningún manifest de deploy** para core/executor/web, y no hay GitOps.
 
-Orden de dependencias: 5.1 → (5.2, 5.3, 5.4 en paralelo — 5.4 es de Claude Code y 5.3 de Antigravity, sin colisión) → 6.1 → (6.2, 6.3, 6.4 en paralelo) → 7.1 → 7.2 → 7.3. Mientras Claude Code hace 5.4/6.1, Antigravity avanza 5.3; mientras Antigravity hace 6.2-6.4, Claude Code prepara 7.2/7.3.
+Orden de dependencias: 5.1 → (5.2, 5.3, 5.4 en paralelo — 5.4 es de Claude Code y 5.3 de Antigravity, sin colisión) → 5.5 (tras 5.2: mismo repo Executor, mismo owner) → 6.1 → (6.2, 6.3, 6.4 en paralelo) → 7.1 → 7.2 → 7.3. Mientras Claude Code hace 5.4/5.5/6.1, Antigravity avanza 5.3; mientras Antigravity hace 6.2-6.4, Claude Code prepara 7.2/7.3.
 
 ---
 
@@ -547,7 +547,7 @@ ANTES DE IMPLEMENTAR: Propón el plan, incluyendo tu decisión de cierre de sesi
 Vas a extender el agent loop (5.1, ya mergeado) para que el orquestador pueda descomponer un objetivo y delegarlo a DOS O MÁS sub-agentes que trabajan en paralelo y se coordinan sin discrepar. Requisito explícito del owner (2026-07-25). Es área de Claude Code (`src/agent/`) y requiere ADR nuevo: cambia el modelo de ejecución del sistema.
 
 DECISIÓN ARQUITECTÓNICA YA TOMADA POR EL OWNER (no la re-litigues, documentala en el ADR):
-Los sub-agentes NO se comunican directamente entre sí (peer-to-peer). Se coordinan vía el orquestador con estado compartido — patrón hub-and-spoke con un "task ledger" (blackboard): el orquestador descompone el objetivo en tareas con dependencias, cada sub-agente lee el ledger (qué hicieron los demás, qué decisiones ya se tomaron) y escribe sus resultados ahí. Razón: la comunicación libre A2A produce exactamente las discrepancias que se quieren evitar, multiplica el riesgo de loops runaway, y rompe el embudo único de HITL/audit. La coordinación por estado compartido mediado da consistencia (una sola fuente de verdad de decisiones) con las garantías intactas.
+Los sub-agentes NO se comunican directamente entre sí (peer-to-peer, DMs). Se coordinan vía un "task ledger" compartido estilo Jira, mediado por el orquestador: el orquestador descompone el objetivo en tickets (descripción, estado, agente asignado, dependencias), cada sub-agente lee el tablero COMPLETO (qué hicieron los demás, qué decisiones ya se tomaron) y escribe en sus propios tickets: resultados, observaciones y comentarios — incluyendo señalar contradicciones con lo de otro agente. Las discrepancias NO se suprimen: se registran como conflicto visible en el ticket, y las resuelve una escalera de decisión explícita — (a) conflicto de bajo riesgo: el orquestador decide en modo-auto con el tablero completo como contexto, dejando registrada la resolución y el porqué; (b) conflicto material (afecta algo de nivel confirm, o los agentes proponen acciones incompatibles): se escala al OWNER vía HITL — el owner es siempre el nivel máximo de la escalera. Razón del diseño: es la diferencia entre un equipo que discute dentro del ticket (trazable, el lead decide, todos ven el acuerdo) y uno que se manda mensajes privados (nadie sabe qué se acordó ni por qué). Funcionalmente los agentes sí se responden entre sí — a través del tablero.
 
 ANTES DE ESCRIBIR CÓDIGO:
 1. Lee `../Yormun_Docs/docs/BLUEPRINT.md` secciones 6 y 9, y los ADRs existentes en `../Yormun_Docs/docs/adr/`.
@@ -555,7 +555,9 @@ ANTES DE ESCRIBIR CÓDIGO:
 3. Revisa `../Yormun_Docs/STATUS.md`.
 
 TU TAREA:
-- `src/agent/orchestrator.service.ts` — descompone el objetivo en un task ledger (tareas, dependencias, estado: pending/in-progress/done/failed), asigna cada tarea a un sub-agente, resuelve el orden por dependencias (paralelo cuando no hay dependencia), y al final reconcilia los resultados en una respuesta única. Si dos resultados se contradicen, el orquestador lo detecta y lanza una pasada de reconciliación (con el ledger completo como contexto) en vez de elegir silenciosamente.
+- **El ledger se persiste en Postgres** (tablas nuevas + migración con `.down.sql`, patrón de siempre): tickets con estado (pending/in-progress/done/failed/blocked), agente asignado, dependencias, y un hilo de comentarios por ticket (autor = agente u orquestador u owner). Persistido, no en memoria: un objetivo puede quedar bloqueado días esperando una aprobación HITL y debe sobrevivir restarts — mismo criterio que `pending_approvals`. Además, las interfaces de Fase 6 van a renderizar este tablero (el dashboard lo muestra como un board estilo Jira).
+- `src/agent/orchestrator.service.ts` — descompone el objetivo en tickets, asigna cada uno a un sub-agente, resuelve el orden por dependencias (paralelo cuando no hay dependencia), y al final reconcilia los resultados en una respuesta única aplicando la escalera de decisión de arriba: conflictos de bajo riesgo los resuelve él (registrando resolución y porqué en el ticket), conflictos materiales escalan al owner vía HITL.
+- **Trabajo sobre código en branches seguras (requisito del owner):** cuando una tarea implica modificar un repo, el sub-agente trabaja SIEMPRE en una branch propia (`feature/agent/<ticket>`), jamás en main. El merge a main es una tool con `hitlLevel: 'confirm'` — lo aprueba el owner. Declarala en `registry.ts`.
 - Sub-agente = instancia del agent loop de 5.1 con: (a) subset acotado de tools (el orquestador decide cuáles según la tarea — nunca más de las necesarias), (b) `sessionId` propio derivado del turno padre (el budget guard ve a cada sub-agente y el cap diario/kill switch aplican globalmente), (c) sus propios límites de iteraciones/reintentos, (d) acceso de LECTURA al ledger y escritura solo de sus propias entradas.
 - HITL intacto: un tool `confirm`/`dual-confirm` invocado por un sub-agente crea la misma pending approval de siempre, con atribución de QUÉ sub-agente y QUÉ tarea del ledger la originó (visible en el planSummary y en el audit log — extiende `actor` o agrega metadata, justifica en el ADR). El sub-agente queda bloqueado en esa tarea hasta resolución; el orquestador puede seguir con tareas independientes.
 - Audit: cada acción registra qué agente la ejecutó. El ledger completo del turno queda inspeccionable (para las interfaces de Fase 6).
@@ -572,6 +574,38 @@ RESTRICCIONES:
 - Todo lo de 5.1 sigue aplicando: sanitización, hitlLevel estático, budget, límites.
 
 USA CLAUDE OPUS 4.8 (diseño de concurrencia + modelo de seguridad).
+
+ANTES DE IMPLEMENTAR: Propón el plan y el borrador del ADR. Espera aprobación.
+```
+
+### 5.5 [CLAUDE CODE] — Servicios de larga vida: preview apps con puertos expuestos (repos: Yormun_Executor + Yormun_Core + Yormun_Infra)
+
+```
+Requisito del owner (2026-07-25): los agentes deben poder LEVANTAR apps corriendo — un frontend con `npm run dev`, un backend de prueba — no solo ejecutar código run-to-completion. Hoy el Executor solo soporta pods que corren y mueren. Vas a agregar la categoría "pod de servicio": proceso de larga vida con puerto expuesto. Requiere ADR (amplía el RBAC del Executor y el modelo de exposición).
+
+ANTES DE ESCRIBIR CÓDIGO:
+1. Lee `../Yormun_Docs/docs/BLUEPRINT.md` secciones 4 (ejecución aislada), 5.2 (separación de dominios — la regla de oro #10 es la base de este diseño) y `AGENTS.md` 5.5 (egress whitelist).
+2. Lee el código real de `Yormun_Executor/src/pod-lifecycle/` y `src/k8s/`, y los manifests de `Yormun_Infra/k8s/base/executor/` (RBAC actual) y del wildcard `*.yormungander.com`.
+3. Revisa `../Yormun_Docs/STATUS.md`. Requiere 5.2 mergeado (mismo repo, mismo owner — secuencial).
+
+TU TAREA:
+- Yormun_Executor: nueva capacidad `startService` / `stopService` — crea en `agents-sandbox` un pod de larga vida + Service + IngressRoute de Traefik bajo `https://<slug>.yormungander.com` (NUNCA yormun.com — regla de oro #10: esto ES contenido generado por agentes). El pod corre el comando declarado (`npm run dev`, `node server.js`, etc.) sobre un workspace montado (el código que el agente generó/clonó en su branch).
+- **TTL obligatorio**: todo servicio nace con vencimiento (default corto, ej. 2h, máximo configurable). Un reaper (`@Cron`) destruye pod+Service+IngressRoute vencidos. Extender el TTL es una acción explícita. Límite de servicios concurrentes (default bajo).
+- Sin secretos: los pods de servicio jamás reciben env vars de Infisical ni tokens. NetworkPolicy: mismo modelo de egress whitelist que los pods de ejecución (npm registry para instalar deps, y nada más por default). Resources y probes obligatorios.
+- RBAC: el ServiceAccount `executor` gana `create/delete` de Services e IngressRoutes SOLO en `agents-sandbox` — actualiza los manifests en Yormun_Infra (coordina en STATUS.md: repo de Antigravity, cambio acotado tuyo por ser frontera de seguridad, mismo precedente que backups en Fase 1.2).
+- Yormun_Core: declarar las tools en `registry.ts` — `startPreviewService` con `hitlLevel: 'confirm'` (expone código de agentes a internet, aunque sea en el dominio sandbox), `stopPreviewService` con `notify`, `listPreviewServices` con `auto`. Registrar los executors correspondientes (cliente HTTP del Executor de 5.2).
+- Tests: integración con el testcontainer K3s existente (pod de servicio arranca, responde HTTP dentro del clúster, el reaper lo destruye al vencer TTL), RBAC no permite crear Services fuera de agents-sandbox, unit tests del cliente en core.
+
+CRITERIOS DE ÉXITO:
+- Flujo completo: el agente propone "levanto el frontend que generé" → pending approval → al aprobar, el servicio queda accesible en `https://<slug>.yormungander.com` con hot reload funcionando → al vencer el TTL desaparece solo, con notificación.
+- Ningún camino por el que un servicio quede corriendo sin TTL, reciba un secreto, o se exponga bajo yormun.com.
+- CI verde en real en los repos tocados. ADR escrito. Actualiza `../Yormun_Docs/STATUS.md`.
+
+RESTRICCIONES:
+- El Executor sigue siendo el ÚNICO que habla con Kubernetes (regla de oro #1).
+- Prohibido `hostNetwork`, prohibido `latest`, prohibido montar el socket de nada.
+
+USA CLAUDE OPUS 4.8 (frontera de seguridad: exposición de código de agentes a internet).
 
 ANTES DE IMPLEMENTAR: Propón el plan y el borrador del ADR. Espera aprobación.
 ```
