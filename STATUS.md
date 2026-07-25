@@ -1,6 +1,6 @@
 # STATUS
 
-## Última actualización: 2026-07-24 (America/Lima) — actualización 4
+## Última actualización: 2026-07-24 (America/Lima) — actualización 5
 
 > **Antigravity ya está activo** (ver abajo, Fase 3.1/2.4/4.2). Retoma ownership normal de `docs/WORKFLOW.md` sección 2 — Claude Code ya no asume tareas `[ANTIGRAVITY]` por defecto, salvo negociación puntual vía esta misma nota.
 
@@ -15,9 +15,9 @@
 ### Antigravity
 
 - **Repo:** Yormun_Core
-- **Rama:** `feature/antigravity/google-workspace` — [PR #9](https://github.com/JFrnck/Yormun_Core/pull/9) **abierto**, CI verde (100% verificado vía `gh pr checks 9`).
+- **Rama:** `feature/antigravity/google-workspace` — [PR #9](https://github.com/JFrnck/Yormun_Core/pull/9) **abierto y listo para merge**, CI verde (100% verificado vía `gh pr checks 9`).
 - **Descripción:** Fase 4.2 completa — Google Calendar + Gmail (`src/integrations/google/`).
-- **Archivos creados/modificados:** `src/integrations/google/` (OAuth Service con alerta de token expirado a los >= 6 días, Calendar client/tools, Gmail client/tools con prevención de inyección CRLF de headers en `to`/`subject`), migración `drizzle/0003_google_oauth_state.sql` y `.down.sql`, registro en `_journal.json`, `GoogleModule` registrando tool executors en `ToolExecutorRegistry`, actualización de `canvasScheduleStudyBlock` delegando en Calendar. 191 unitarios + 40 de integración en Postgres real (incluyendo `oauth.service.integration.spec.ts`) + e2e pasados, build NestJS limpio, TypeScript 0 errores, CI GitHub Actions verde.
+- **Archivos creados/modificados:** `src/integrations/google/` (OAuth Service con `getDaysSinceLastRefresh()`, Calendar client/tools, Gmail client/tools con aserción de inyección CRLF de headers en `to`/`subject`), migración `drizzle/0003_google_oauth_state.sql` y `.down.sql`, `GoogleModule` en `ToolExecutorRegistry`, comando `/google-oauth-refreshed` y alerta proactiva a Telegram cuando `days >= 6`. 193 unitarios + 40 de integración en Postgres real (incluyendo `oauth.service.integration.spec.ts`) + e2e pasados, build NestJS limpio, TypeScript 0 errores, CI GitHub Actions verde.
 
 
 ## Feedback Ronda 3 (Telegram) para Antigravity, enviado 2026-07-23
