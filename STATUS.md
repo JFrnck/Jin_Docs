@@ -1,6 +1,6 @@
 # STATUS
 
-## Última actualización: 2026-07-24 (America/Lima) — actualización 5
+## Última actualización: 2026-07-24 (America/Lima) — actualización 6
 
 > **Antigravity ya está activo** (ver abajo, Fase 3.1/2.4/4.2). Retoma ownership normal de `docs/WORKFLOW.md` sección 2 — Claude Code ya no asume tareas `[ANTIGRAVITY]` por defecto, salvo negociación puntual vía esta misma nota.
 
@@ -9,15 +9,16 @@
 ### Claude Code
 
 - **Repo:** ninguno activo ahora mismo.
-- **Descripción:** Fase 4.1 (Budget guard + kill switch) completa — [PR #6](https://github.com/JFrnck/Yormun_Core/pull/6), **mergeado**. Prerequisito "ejecutar al aprobar" completo — [PR #8](https://github.com/JFrnck/Yormun_Core/pull/8), **mergeado**.
+- **Descripción:** Fase 4.1 (Budget guard + kill switch) completa — [PR #6](https://github.com/JFrnck/Yormun_Core/pull/6), **mergeado**. Prerequisito "ejecutar al aprobar" completo — [PR #8](https://github.com/JFrnck/Yormun_Core/pull/8), **mergeado**. Revisión de 3 rondas + merge de [PR #9](https://github.com/JFrnck/Yormun_Core/pull/9) (Fase 4.2, Antigravity) — ver detalle abajo.
 - **Próximo:** Fase 4.3 (Memoria sqlite-vec).
 
 ### Antigravity
 
 - **Repo:** Yormun_Core
-- **Rama:** `feature/antigravity/google-workspace` — [PR #9](https://github.com/JFrnck/Yormun_Core/pull/9) **abierto y listo para merge**, CI verde (100% verificado vía `gh pr checks 9`).
-- **Descripción:** Fase 4.2 completa — Google Calendar + Gmail (`src/integrations/google/`).
-- **Archivos creados/modificados:** `src/integrations/google/` (OAuth Service con `getDaysSinceLastRefresh()`, Calendar client/tools, Gmail client/tools con aserción de inyección CRLF de headers en `to`/`subject`), migración `drizzle/0003_google_oauth_state.sql` y `.down.sql`, `GoogleModule` en `ToolExecutorRegistry`, comando `/google-oauth-refreshed` y alerta proactiva a Telegram cuando `days >= 6`. 193 unitarios + 40 de integración en Postgres real (incluyendo `oauth.service.integration.spec.ts`) + e2e pasados, build NestJS limpio, TypeScript 0 errores, CI GitHub Actions verde.
+- **Rama:** `feature/antigravity/google-workspace` — [PR #9](https://github.com/JFrnck/Yormun_Core/pull/9), **mergeado a `main`, rama borrada**.
+- **Descripción:** Fase 4.2 completa — Google Calendar + Gmail (`src/integrations/google/`). **Fin de Fase 4.2.**
+- **Estado:** 🟢 Sin tarea activa — a la espera de la siguiente fase que le asigne el owner (no hay ninguna en el roadmap actual asignada a Antigravity; Fase 4.3 es de Claude Code).
+- **Archivos creados/modificados:** `src/integrations/google/` (`GoogleOAuthService` con `getDaysSinceLastRefresh()`, Calendar client/tools, Gmail client/tools con sanitización anti-CRLF en `to`/`subject`), migración `drizzle/0003_google_oauth_state.sql` + `.down.sql`, `GoogleModule` registrando executors en `ToolExecutorRegistry`, comando `/google-oauth-refreshed` + alerta proactiva a Telegram cuando `days >= 6` (con dedupe diario). 193 tests unitarios + 40 de integración en Postgres real + e2e, CI GitHub Actions verde — **verificado independientemente por Claude Code en 3 rondas de revisión** (ver sección de feedback abajo), no solo el self-report.
 
 
 ## Feedback Ronda 3 (Telegram) para Antigravity, enviado 2026-07-23
@@ -104,7 +105,7 @@ Lo que el plan sí acierta: los 3 niveles HITL coinciden con blueprint/PROMPTS, 
 | Yormun_Core | [#6](https://github.com/JFrnck/Yormun_Core/pull/6) | Fase 4.1: budget guard + kill switch | ✅ mergeado |
 | Yormun_Core | [#7](https://github.com/JFrnck/Yormun_Core/pull/7) | Prerequisito Fase 4.2: 4 tools de Calendar en registry.ts | ✅ mergeado |
 | Yormun_Core | [#8](https://github.com/JFrnck/Yormun_Core/pull/8) | Prerequisito Fase 4.2: mecanismo "ejecutar al aprobar" (`ToolExecutorRegistry` + `ApprovalExecutionService`) | ✅ mergeado |
-| Yormun_Core | [#9](https://github.com/JFrnck/Yormun_Core/pull/9) | Fase 4.2: integración Google Calendar + Gmail (OAuth Testing, rate limiting, sanitización, diferido HITL) | 🟡 abierto |
+| Yormun_Core | [#9](https://github.com/JFrnck/Yormun_Core/pull/9) | Fase 4.2: integración Google Calendar + Gmail (OAuth Testing, rate limiting, sanitización, diferido HITL) | ✅ mergeado (3 rondas de revisión, ver feedback abajo) |
 
 **Nota — Yormun_Infra #2 se reemplazó por #3:** al mergear #1 con `--delete-branch`, GitHub cerró automáticamente #2 porque su rama base (`feature/claude/infra-base`, la de #1) dejó de existir — efecto colateral no documentado de GitHub en PRs apilados, no una acción intencional. Un PR cerrado así no se puede reabrir ni re-apuntar vía API una vez cerrado. Recuperado abriendo #3 desde la misma rama head (`feature/claude/infra-backups`, intacta) directo contra `main`; contenido idéntico (26 archivos, 1128 inserciones), CI verde, mergeado normalmente.
 
@@ -127,6 +128,7 @@ Los `"name": "temp-*"` de `package.json` en Web y CLI ya no aplican como pendien
 - **2026-07-24 — Fase 4.1: alertas de budget/kill switch van directo a Telegram, no vía Alertmanager.** BLUEPRINT 9.6/10.4 especifica "Alertmanager → Telegram", pero Alertmanager nunca se desplegó (Fase 1 observability quedó explícitamente mínima: Prometheus + Loki + Grafana). Desplegarlo ahora era trabajo de infra fuera de alcance de Fase 4.1. Se decidió notificar directo desde `Yormun_Core` al bot ya construido (Fase 2.4) — mismo destino final, sin la dependencia de infra nueva. Documentado en el plan de la fase, no requirió pausar para preguntar.
 - **2026-07-24 — Fase 4.1: `sessionId` opcional en `BudgetGuardedModelRouter`, no una abstracción de sesión persistente.** El código no tenía ningún concepto de "sesión" (ningún caller pasaba un ID). Se agregó un `sessionId` opcional — si no se pasa, cada llamada es su propia sesión (UUID nuevo). Telegram usa un `sessionId` fijo por chat (conversación libre comparte presupuesto); Canvas/shadowing no pasa ninguno (cada corrida nocturna es una sola llamada). Evita inventar una abstracción de sesión persistente que nada más en el sistema necesita todavía.
 - **2026-07-24 — Fase 4.2: OAuth scopes confirmados por el owner.** `calendar` (lectura/escritura de eventos), `gmail.readonly` (leer correos), `gmail.send` (enviar/responder) — los 3 mínimos necesarios para las tools ya declaradas, sin scopes de administración ni de otras APIs de Workspace.
+- **2026-07-24 — Fase 4.2: el gap de "reset de la alerta de OAuth" se corrige antes de mergear PR #9, no se acepta como deuda.** Al revisar el PR se encontró que `updateLastRefreshedAt()` no tenía ningún caller real y la alerta de vencimiento solo logueaba (nunca le llegaba nada al owner). Se le presentaron 2 opciones: mergear igual y dejarlo como follow-up, o pedirle a Antigravity un fix acotado antes de mergear. Eligió lo segundo — mismo criterio que otras veces con hallazgos de seguridad/HITL: si el fix es chico y acotado, se resuelve antes de dar la fase por cerrada en vez de acumular deuda. Resultado: comando `/google-oauth-refreshed` + alerta proactiva real, ver "PR #9 (Google Calendar + Gmail): 3 rondas de revisión".
 - **2026-07-24 — Fase 4.2: el hallazgo "no existe mecanismo de ejecutar-al-aprobar" lo construye Claude Code primero, no Antigravity.** Al revisar el plan de Antigravity para Google Calendar/Gmail se detectó que ningún tool `confirm` anterior había tenido efectos reales (Canvas es todo `auto`; `sendEmail` se declaró en Fase 2.2 pero nunca se implementó) — por lo que `TelegramBotService.processApproval()` nunca ejecutaba nada, solo cambiaba estado y auditaba, y `pending_approvals` no guardaba el payload de la acción. Se le presentaron 2 opciones al owner: que Antigravity resolviera esto de forma acotada a sus 2 tools, o que Claude Code construyera el mecanismo genérico primero. Eligió que Claude Code lo construyera primero (mismo criterio que los prerequisitos de Fase 3.1: infraestructura compartida que futuras integraciones también necesitarán). Resultado: PR #8 (`ToolExecutorRegistry` + `ApprovalExecutionService`), ver detalle en la sección "Fase 4.2 — decisiones y prerequisitos".
 
 ## Plan aprobado
@@ -140,14 +142,31 @@ Los `"name": "temp-*"` de `package.json` en Web y CLI ya no aplican como pendien
 6. **Fase 3.1** [Antigravity] — ✅ hecho, PR #4 Yormun_Core (Canvas LMS + Shadowing Académico). Prerequisitos (`security`/`model-provider`) en PR #3, Claude Code.
 7. **Fase 2.4** [Antigravity] — ✅ hecho, PR #5 Yormun_Core (bot de Telegram).
 8. **Fase 4.1** [Claude Code] — ✅ hecho, PR #6 Yormun_Core (Budget guard + kill switch).
+9. **Fase 4.2** [Antigravity] — ✅ hecho, PR #9 Yormun_Core (Google Calendar + Gmail). Prerequisitos en PR #7 (tools de Calendar en registry.ts) y PR #8 (`ToolExecutorRegistry`/`ApprovalExecutionService`), ambos Claude Code. `canvasScheduleStudyBlock` desbloqueado.
 
-**Fin de la Fase 2, Fase 3.1 y Fase 4.1 del roadmap.** Pendientes: Fase 4.2 (Google Calendar + Gmail, Antigravity — desbloquea `canvasScheduleStudyBlock`) y Fase 4.3 (Memoria sqlite-vec, Claude Code).
+**Fin de la Fase 2, Fase 3.1, Fase 4.1 y Fase 4.2 del roadmap.** Pendiente: Fase 4.3 (Memoria sqlite-vec, Claude Code).
 
 ## Bloqueados / esperando
 
 - Ejecución real del bootstrap en la VM OCI la hace el owner (Claude Code solo escribe manifests/scripts).
 
-## Feedback Ronda 1 (Google Calendar + Gmail) para Antigravity, enviado 2026-07-24
+## PR #9 (Google Calendar + Gmail): 3 rondas de revisión de código, mergeado 2026-07-24
+
+Claude Code revisó el PR #9 de forma independiente en cada ronda (checkout real de la rama + `tsc --noEmit`/`lint`/`test`/`test:integration`/`gh pr checks`, nunca solo el self-report de Antigravity) antes de mergear.
+
+**Ronda 1 (código):**
+1. **Bloqueante — CI real en rojo, no verde.** `.github/workflows/ci.yml` nunca se actualizó con las nuevas env vars requeridas (`GOOGLE_CLIENT_ID`/`SECRET`/`REFRESH_TOKEN`) — el self-report de Antigravity se basó en correr los comandos localmente con env vars exportadas a mano, no en el run real de GitHub Actions, que sí fallaba (`pnpm run test:e2e` reventaba al bootstrapear `AppModule`). **Lección repetida** (mismo patrón que ya pasó en Fase 2.4): correr `gh pr checks <N>` siempre antes de reportar "CI verde".
+2. **Seguridad — inyección de headers CRLF en `sendEmail`.** `GoogleGmailClientService.sendEmail()` interpolaba `to`/`subject` directo en headers RFC822 sin sanitizar — un `\r\n` embebido podía inyectar headers arbitrarios (`Bcc:`, etc.) invisibles en el `planSummary` que el owner aprueba por Telegram.
+3. **Falta test de integración real para `GoogleOAuthService`** — tocaba Postgres de verdad pero solo tenía tests con `Db` mockeado, rompiendo el patrón del resto del repo (`AGENTS.md` §6.3).
+4. Menor: `CalendarNotImplementedError` quedó como código muerto tras desbloquear `canvasScheduleStudyBlock`.
+
+Todo resuelto por Antigravity en la siguiente iteración — de paso, al agregar el test de integración real salió a la luz que la migración `0003_google_oauth_state` **nunca se había registrado en `drizzle/meta/_journal.json`**, así que jamás se hubiera aplicado en un deploy real. Corregido también.
+
+**Ronda 2 (cierre del ciclo de alerta OAuth):** el mecanismo de aviso de vencimiento de OAuth no tenía forma de resetearse en producción — `updateLastRefreshedAt()` no tenía ningún caller real, y `checkOAuthTokenStatus()` solo hacía `logger.warn()` sin avisarle al owner por ningún canal real. El owner eligió explícitamente pedir el fix antes de mergear en vez de aceptarlo como deuda. Resuelto: comando `/google-oauth-refreshed` en Telegram (mismo patrón que `/unpause`, Fase 4.1) + alerta proactiva real vía `TelegramBotService.checkOAuthAlert()` (con dedupe diario) cuando pasan ≥6 días sin refresh.
+
+**Deuda menor aceptada, no bloqueante:** el cron viejo `GoogleOAuthService.checkOAuthTokenStatus()` (solo loguea) quedó redundante con `checkOAuthAlert()` de Telegram — limpieza cosmética pendiente, sin urgencia. Falta también un test explícito del dedupe diario de la alerta OAuth (sí existe el equivalente para los umbrales de budget).
+
+## Feedback Ronda 1 (Google Calendar + Gmail) para Antigravity, plan enviado 2026-07-24 (ya resuelto)
 
 Claude Code revisó el plan de Antigravity para `src/integrations/google/` (además de resolver los 2 puntos de diseño de la sección siguiente, que ya se le comunicaron aparte). 3 puntos pendientes de ajustar antes/durante la implementación:
 
