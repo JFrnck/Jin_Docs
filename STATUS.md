@@ -1,6 +1,6 @@
 # STATUS
 
-## Última actualización: 2026-07-25 (America/Lima) — actualización 8
+## Última actualización: 2026-07-25 (America/Lima) — actualización 9
 
 > **Antigravity ya está activo** (ver abajo, Fase 3.1/2.4/4.2). Retoma ownership normal de `docs/WORKFLOW.md` sección 2 — Claude Code ya no asume tareas `[ANTIGRAVITY]` por defecto, salvo negociación puntual vía esta misma nota.
 
@@ -9,8 +9,8 @@
 ### Claude Code
 
 - **Repo:** ninguno activo ahora mismo.
-- **Descripción:** Fase 4.1 (Budget guard + kill switch) completa — [PR #6](https://github.com/JFrnck/Yormun_Core/pull/6), **mergeado**. Prerequisito "ejecutar al aprobar" completo — [PR #8](https://github.com/JFrnck/Yormun_Core/pull/8), **mergeado**. Revisión de 3 rondas + merge de [PR #9](https://github.com/JFrnck/Yormun_Core/pull/9) (Fase 4.2, Antigravity). Fase 4.3 (Memoria extendida sqlite-vec) completa — [PR #10](https://github.com/JFrnck/Yormun_Core/pull/10), **mergeado**. Roadmap Fase 5-7 planificado y prompts escritos en `docs/PROMPTS.md` (2026-07-25), incluida la Fase 5.4 (multi-agente) agregada a pedido del owner. Fase 5.1 (agent loop) completa — [PR #11](https://github.com/JFrnck/Yormun_Core/pull/11), **mergeado**. Ver detalle abajo.
-- **Próximo:** ninguno activo — Fase 5.2 (`runCode` + Modal real) y Fase 5.4 (multi-agente) quedan libres para arrancar, ambas requieren 5.1 (ya hecho).
+- **Descripción:** Fase 4.1 (Budget guard + kill switch) completa — [PR #6](https://github.com/JFrnck/Yormun_Core/pull/6), **mergeado**. Prerequisito "ejecutar al aprobar" completo — [PR #8](https://github.com/JFrnck/Yormun_Core/pull/8), **mergeado**. Revisión de 3 rondas + merge de [PR #9](https://github.com/JFrnck/Yormun_Core/pull/9) (Fase 4.2, Antigravity). Fase 4.3 (Memoria extendida sqlite-vec) completa — [PR #10](https://github.com/JFrnck/Yormun_Core/pull/10), **mergeado**. Roadmap Fase 5-7 planificado y prompts escritos en `docs/PROMPTS.md` (2026-07-25), incluida la Fase 5.4 (multi-agente) agregada a pedido del owner. Fase 5.1 (agent loop) completa — [PR #11](https://github.com/JFrnck/Yormun_Core/pull/11), **mergeado**. Fase 5.2 (`runCode` end-to-end + Modal real) completa en ambos repos — [Yormun_Executor PR #3](https://github.com/JFrnck/Yormun_Executor/pull/3) y [Yormun_Core PR #12](https://github.com/JFrnck/Yormun_Core/pull/12), **ambos mergeados**. Ver detalle abajo.
+- **Próximo:** ninguno activo — Fase 5.4 (multi-agente) y Fase 5.5 (pods de servicio, ahora desbloqueada tras 5.2) quedan libres para arrancar.
 
 ### Antigravity
 
@@ -108,6 +108,8 @@ Lo que el plan sí acierta: los 3 niveles HITL coinciden con blueprint/PROMPTS, 
 | Yormun_Core | [#9](https://github.com/JFrnck/Yormun_Core/pull/9) | Fase 4.2: integración Google Calendar + Gmail (OAuth Testing, rate limiting, sanitización, diferido HITL) | ✅ mergeado (3 rondas de revisión, ver feedback abajo) |
 | Yormun_Core | [#10](https://github.com/JFrnck/Yormun_Core/pull/10) | Fase 4.3: memoria extendida del agente con sqlite-vec | ✅ mergeado |
 | Yormun_Core | [#11](https://github.com/JFrnck/Yormun_Core/pull/11) | Fase 5.1: agent loop con tool-calling, plan-and-solve y self-correction | ✅ mergeado |
+| Yormun_Executor | [#3](https://github.com/JFrnck/Yormun_Executor/pull/3) | Fase 5.2: `ModalService` real (sandbox Python/pandas) + ruteo local/remoto por `language` | ✅ mergeado |
+| Yormun_Core | [#12](https://github.com/JFrnck/Yormun_Core/pull/12) | Fase 5.2: tool `runCode` en registry + `src/executor-client/` (cierra el loop con el Executor) | ✅ mergeado |
 
 **Nota — Yormun_Infra #2 se reemplazó por #3:** al mergear #1 con `--delete-branch`, GitHub cerró automáticamente #2 porque su rama base (`feature/claude/infra-base`, la de #1) dejó de existir — efecto colateral no documentado de GitHub en PRs apilados, no una acción intencional. Un PR cerrado así no se puede reabrir ni re-apuntar vía API una vez cerrado. Recuperado abriendo #3 desde la misma rama head (`feature/claude/infra-backups`, intacta) directo contra `main`; contenido idéntico (26 archivos, 1128 inserciones), CI verde, mergeado normalmente.
 
@@ -156,10 +158,10 @@ Los `"name": "temp-*"` de `package.json` en Web y CLI ya no aplican como pendien
 **Roadmap extendido (2026-07-25, prompts ya escritos en `docs/PROMPTS.md` — Fase 5+):** el owner pidió planificar el cierre completo del proyecto. Los prompts nuevos asumen las desviaciones reales ya decididas (sin BullMQ, sin Alertmanager, mecanismo aprobar→ejecutar del PR #8) — leer el bloque "Contexto de realidad del código" en PROMPTS.md antes de usarlos:
 
 11. **Fase 5.1** [Claude Code] — ✅ hecho, PR #11 Yormun_Core (Agent loop con tool-calling + plan-and-solve + self-correction). Ver sección dedicada abajo. **Era el prerequisito de todo lo demás** — ya desbloqueado.
-12. **Fase 5.2** [Claude Code] — `runCode` end-to-end + Modal real (Yormun_Core + Yormun_Executor). Desbloqueado, sin arrancar.
+12. **Fase 5.2** [Claude Code] — ✅ hecho, [Yormun_Executor PR #3](https://github.com/JFrnck/Yormun_Executor/pull/3) + [Yormun_Core PR #12](https://github.com/JFrnck/Yormun_Core/pull/12) (`runCode` end-to-end + Modal real). Ver sección dedicada abajo.
 13. **Fase 5.3** [Antigravity] — Sesiones reales en Telegram: agent loop + memoria (`src/telegram/**`). Desbloqueado, sin arrancar.
 14. **Fase 5.4** [Claude Code] — Orquestación multi-agente: sub-agentes coordinados vía task ledger estilo Jira persistido en Postgres (`src/agent/`, requiere ADR nuevo). Desbloqueado, sin arrancar.
-15. **Fase 5.5** [Claude Code] — Pods de servicio: preview apps con puertos expuestos (`npm run dev`, backends) bajo `*.yormungander.com` con TTL (Yormun_Executor + Core + Infra, requiere ADR).
+15. **Fase 5.5** [Claude Code] — Pods de servicio: preview apps con puertos expuestos (`npm run dev`, backends) bajo `*.yormungander.com` con TTL (Yormun_Executor + Core + Infra, requiere ADR). **Desbloqueado ahora que 5.2 está hecho**, sin arrancar.
 16. **Fase 6.1** [Claude Code] — Auth JWT single-user + API REST/WebSocket para interfaces (Yormun_Core).
 17. **Fase 6.2** [Antigravity] — Web Dashboard MVP (Yormun_Web — hoy es el template sin tocar).
 18. **Fase 6.3** [Antigravity] — Monaco + Zone Widgets + applets (Yormun_Web).
@@ -168,7 +170,7 @@ Los `"name": "temp-*"` de `package.json` en Web y CLI ya no aplican como pendien
 21. **Fase 7.2** [Claude Code] — Runbook de activación real (secretos reales, OAuth consent, webhook Telegram, smoke test E2E).
 22. **Fase 7.3** [Claude Code] — Hardening: auditoría de seguridad completa, chaos tests, MCP servers.
 
-Dependencias: 5.1 → (5.2, 5.3, 5.4) → 5.5 (tras 5.2) → 6.1 → (6.2, 6.3, 6.4) → 7.1 → 7.2 → 7.3. Paralelismo natural: Antigravity avanza 5.3 mientras Claude Code hace 5.4/5.5/6.1; Antigravity hace 6.2-6.4 mientras Claude Code prepara 7.2/7.3. **Fase 5.1 hecha — siguiente: 5.2/5.3/5.4 en paralelo (Antigravity toma 5.3, Claude Code elige entre 5.2/5.4).**
+Dependencias: 5.1 → (5.2, 5.3, 5.4) → 5.5 (tras 5.2) → 6.1 → (6.2, 6.3, 6.4) → 7.1 → 7.2 → 7.3. Paralelismo natural: Antigravity avanza 5.3 mientras Claude Code hace 5.4/5.5/6.1; Antigravity hace 6.2-6.4 mientras Claude Code prepara 7.2/7.3. **Fase 5.1 y 5.2 hechas — siguiente: 5.3 (Antigravity) y 5.4/5.5 en paralelo (Claude Code elige entre ambas).**
 
 ## Bloqueados / esperando
 
@@ -183,6 +185,20 @@ Dependencias: 5.1 → (5.2, 5.3, 5.4) → 5.5 (tras 5.2) → 6.1 → (6.2, 6.3, 
 **Contrato de registro para Fase 5.3 (Antigravity):** el agent loop arma su lista de tools desde `listRegisteredTools()` (`src/tools/registry.ts`, ahora con `inputSchema` por tool) y ejecuta/difiere vía `ToolExecutorRegistry` — el mismo registro que ya usás desde Fase 4.2 para `sendEmail`/`deleteCalendarEventFuture` (PR #8). La única diferencia: antes solo importaba para tools `confirm`, ahora el loop también lo usa para invocación INMEDIATA de tools `auto`/`notify`. Para que tus integraciones (Canvas, Google) queden disponibles al agente, cada módulo debe registrar TODAS sus tools (no solo las confirm) en `toolExecutorRegistry.register(nombre, executor)` dentro de su `onModuleInit()` — hoy solo `sendEmail`/`deleteCalendarEventFuture` están registradas; `readEmails`, `listCalendarEvents`, `createCalendarEvent`, etc. todavía no tienen executor, así que si el agente las invoca hoy, falla con `NoExecutorRegisteredError` (fail-safe, no fail-silent).
 
 **Fuera de alcance, documentado:** el plan es transient (no persiste en Postgres — eso es el ledger de Fase 5.4), no hay multi-agente, y no está conectado a Telegram todavía (Fase 5.3).
+
+## Fase 5.2 — resumen técnico (Yormun_Executor PR #3 + Yormun_Core PR #12, mergeados 2026-07-25)
+
+`runCode` cierra el círculo de BLUEPRINT §4: el agent loop (Fase 5.1) ya puede invocar código real, aislado, con el owner aprobando por Telegram.
+
+**Decisión de diseño clave:** la decisión remoto (Modal) vs. local (pod Deno) ya no es un booleano `remote` que decide el caller (placeholder sin lógica real desde Fase 2.3) — es automática por el Executor según `language: 'typescript' | 'python'` (BLUEPRINT 4.5 lo pide explícito). El tier local es Deno puro, no puede correr Python en absoluto, así que "necesita Python" ya implica "necesita Modal" de forma determinística, sin heurísticas de inspeccionar el código.
+
+**`Yormun_Executor` (PR #3):** `ModalService` real con el SDK oficial `modal@0.9.0` — resuelve `App`/imagen de datos científicos (`pandas`/`numpy`) de forma LAZY (cacheada en el primer `runRemote()` real, no en `onModuleInit()` — evita repetir el error de `GoogleOAuthService` en Fase 4.2, que sí escribía a DB de forma eager y rompía `test:e2e`). Sandbox con `blockNetwork`/`outboundDomainAllowlist` según `egressWhitelist` de la tool, límites duros separados del tier local (`remoteMaxTimeoutSeconds: 1800`, `remoteMemoryLimitMiB: 4096` para `runCode`, vs. `maxTimeoutSeconds: 300` local). Egreso: a diferencia del tier local (K3s/Flannel no resuelve dominio→CIDR, ADR 0003 punto 2), la Sandbox API de Modal acepta dominios directos — asimetría documentada en el código para cuando exista una tool con egreso real.
+
+**`Yormun_Core` (PR #12):** tool `runCode` declarada en `registry.ts` (`hitlLevel: 'confirm'`) con `inputSchema: {code, language}` — deliberadamente **sin** `env`, defensa en profundidad para que el LLM nunca pueda inyectar variables de entorno arbitrarias al pod/sandbox. Nuevo `src/executor-client/` (área propia de Claude Code, atada a `src/hitl/`, no a `src/integrations/**`): `ExecutorClientService` (HTTP client, `EXECUTOR_BASE_URL` requerida fail-fast) + `ExecutorClientModule` que registra el ejecutor de `runCode` en `ToolExecutorRegistry` al bootstrapear — mismo patrón que `GoogleModule` (Fase 4.2). `env` siempre se envía `{}` al Executor.
+
+**Criterio de éxito cerrado:** turno del agente "analiza este CSV con pandas" → LLM invoca `runCode({code, language: 'python'})` → clasifica `confirm` → pending approval → owner aprueba por Telegram → `ApprovalExecutionService` → `ToolExecutorRegistry` → `ExecutorClientService` → Executor real → Modal → resultado (stdout/stderr) sanitizado con `wrapUntrustedContent` (ya lo hace el agent loop para todo resultado de tool, Fase 5.1) vuelve al chat.
+
+**Fuera de alcance, documentado:** `runCode` con TypeScript local ya funcionaba desde Fase 2.3 (pod Deno) — esta fase solo conecta a Core y agrega el tier Modal. No hay preview services de larga vida todavía (eso es Fase 5.5, ahora desbloqueada).
 
 ## Fase 4.3 — resumen técnico (Yormun_Core PR #10, mergeado 2026-07-25)
 
@@ -286,6 +302,7 @@ También corregido de paso: glob patterns rotos en `lint`/`format`, y `package.j
 
 ## Recientemente completado (últimos 7 días)
 
+- 2026-07-25: [Yormun_Executor] [PR #3](https://github.com/JFrnck/Yormun_Executor/pull/3) mergeado + [Yormun_Core] [PR #12](https://github.com/JFrnck/Yormun_Core/pull/12) mergeado — Fase 5.2 completa en ambos repos: `ModalService` real (SDK `modal@0.9.0`, sandbox Python/pandas con imagen cacheada de forma lazy), ruteo local/remoto automático por `language` (reemplaza el `remote: boolean` placeholder de Fase 2.3), tool `runCode` declarada en `registry.ts` (confirm, sin `env` expuesto al LLM) y `src/executor-client/` nuevo conectando el agent loop al Executor real. 51 tests nuevos entre ambos repos (42 unitarios + 2 integración K3s real + 5 e2e en Executor; 258 unitarios + 43 integración Postgres real + 1 e2e en Core tras el merge), CI verde verificado con `gh pr checks` en ambos. Ver sección dedicada abajo.
 - 2026-07-24: [Yormun_Core] [PR #7](https://github.com/JFrnck/Yormun_Core/pull/7) mergeado — prerequisito de Fase 4.2: 4 tools de Calendar declaradas en `registry.ts` (`listCalendarEvents` auto, `updateCalendarEvent` notify, `deleteCalendarEventPast` notify, `deleteCalendarEventFuture` confirm). Matriz HITL actualizada a 10 tools, 100% cobertura.
 - 2026-07-24: [Yormun_Core] [PR #6](https://github.com/JFrnck/Yormun_Core/pull/6) mergeado — Fase 4.1 completa: `src/budget/` (tracking sesión/día, degradación al 80% vía el hint `budgetRemaining` de Fase 3.1, kill switch de runaway persistido en Postgres), métricas Prometheus, `BudgetGuardedModelRouter` ya inyectado en Canvas y Telegram, `/budget` con datos reales y `/unpause` nuevo en el bot. 87 tests nuevos (unitarios + integración Postgres real), CI verde, verificado con `tsc --noEmit -p tsconfig.json` de forma independiente antes de mergear.
 - 2026-07-24: [Yormun_Core] [PR #5](https://github.com/JFrnck/Yormun_Core/pull/5) mergeado — Fase 2.4 completa: bot de Telegram con grammY en modo webhook, auth estricta con `TELEGRAM_OWNER_CHAT_ID` numérico, `TELEGRAM_WEBHOOK_SECRET` requerida fail-fast validando el header de Telegram, `bot.init()` real, comandos `/start`/`/status`/`/tasks`/`/approve`/`/reject`/`/budget` (stub honesto), integración con `DualConfirmService`/`AuditService`/`ModelRouterService`. 3 rondas de review contra el código real (bug de tipos chat_id, gap de seguridad del webhook, `botInfo` hardcodeado, tipos en specs invisibles a `pnpm build`), todas resueltas y verificadas independientemente antes de mergear. 105 tests en verde.
