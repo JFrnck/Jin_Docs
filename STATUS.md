@@ -1,6 +1,6 @@
 # STATUS
 
-## Última actualización: 2026-07-24 (America/Lima) — actualización 6
+## Última actualización: 2026-07-25 (America/Lima) — actualización 7
 
 > **Antigravity ya está activo** (ver abajo, Fase 3.1/2.4/4.2). Retoma ownership normal de `docs/WORKFLOW.md` sección 2 — Claude Code ya no asume tareas `[ANTIGRAVITY]` por defecto, salvo negociación puntual vía esta misma nota.
 
@@ -9,8 +9,8 @@
 ### Claude Code
 
 - **Repo:** ninguno activo ahora mismo.
-- **Descripción:** Fase 4.1 (Budget guard + kill switch) completa — [PR #6](https://github.com/JFrnck/Yormun_Core/pull/6), **mergeado**. Prerequisito "ejecutar al aprobar" completo — [PR #8](https://github.com/JFrnck/Yormun_Core/pull/8), **mergeado**. Revisión de 3 rondas + merge de [PR #9](https://github.com/JFrnck/Yormun_Core/pull/9) (Fase 4.2, Antigravity) — ver detalle abajo.
-- **Próximo:** Fase 4.3 (Memoria sqlite-vec).
+- **Descripción:** Fase 4.1 (Budget guard + kill switch) completa — [PR #6](https://github.com/JFrnck/Yormun_Core/pull/6), **mergeado**. Prerequisito "ejecutar al aprobar" completo — [PR #8](https://github.com/JFrnck/Yormun_Core/pull/8), **mergeado**. Revisión de 3 rondas + merge de [PR #9](https://github.com/JFrnck/Yormun_Core/pull/9) (Fase 4.2, Antigravity). Fase 4.3 (Memoria extendida sqlite-vec) completa — [PR #10](https://github.com/JFrnck/Yormun_Core/pull/10), **mergeado**. Ver detalle abajo.
+- **Próximo:** ninguno pendiente en el roadmap actual — Fase 2, 3.1, 4.1, 4.2 y 4.3 cerradas. A la espera de que el owner defina Fase 5+.
 
 ### Antigravity
 
@@ -106,6 +106,7 @@ Lo que el plan sí acierta: los 3 niveles HITL coinciden con blueprint/PROMPTS, 
 | Yormun_Core | [#7](https://github.com/JFrnck/Yormun_Core/pull/7) | Prerequisito Fase 4.2: 4 tools de Calendar en registry.ts | ✅ mergeado |
 | Yormun_Core | [#8](https://github.com/JFrnck/Yormun_Core/pull/8) | Prerequisito Fase 4.2: mecanismo "ejecutar al aprobar" (`ToolExecutorRegistry` + `ApprovalExecutionService`) | ✅ mergeado |
 | Yormun_Core | [#9](https://github.com/JFrnck/Yormun_Core/pull/9) | Fase 4.2: integración Google Calendar + Gmail (OAuth Testing, rate limiting, sanitización, diferido HITL) | ✅ mergeado (3 rondas de revisión, ver feedback abajo) |
+| Yormun_Core | [#10](https://github.com/JFrnck/Yormun_Core/pull/10) | Fase 4.3: memoria extendida del agente con sqlite-vec | ✅ mergeado |
 
 **Nota — Yormun_Infra #2 se reemplazó por #3:** al mergear #1 con `--delete-branch`, GitHub cerró automáticamente #2 porque su rama base (`feature/claude/infra-base`, la de #1) dejó de existir — efecto colateral no documentado de GitHub en PRs apilados, no una acción intencional. Un PR cerrado así no se puede reabrir ni re-apuntar vía API una vez cerrado. Recuperado abriendo #3 desde la misma rama head (`feature/claude/infra-backups`, intacta) directo contra `main`; contenido idéntico (26 archivos, 1128 inserciones), CI verde, mergeado normalmente.
 
@@ -130,6 +131,7 @@ Los `"name": "temp-*"` de `package.json` en Web y CLI ya no aplican como pendien
 - **2026-07-24 — Fase 4.2: OAuth scopes confirmados por el owner.** `calendar` (lectura/escritura de eventos), `gmail.readonly` (leer correos), `gmail.send` (enviar/responder) — los 3 mínimos necesarios para las tools ya declaradas, sin scopes de administración ni de otras APIs de Workspace.
 - **2026-07-24 — Fase 4.2: el gap de "reset de la alerta de OAuth" se corrige antes de mergear PR #9, no se acepta como deuda.** Al revisar el PR se encontró que `updateLastRefreshedAt()` no tenía ningún caller real y la alerta de vencimiento solo logueaba (nunca le llegaba nada al owner). Se le presentaron 2 opciones: mergear igual y dejarlo como follow-up, o pedirle a Antigravity un fix acotado antes de mergear. Eligió lo segundo — mismo criterio que otras veces con hallazgos de seguridad/HITL: si el fix es chico y acotado, se resuelve antes de dar la fase por cerrada en vez de acumular deuda. Resultado: comando `/google-oauth-refreshed` + alerta proactiva real, ver "PR #9 (Google Calendar + Gmail): 3 rondas de revisión".
 - **2026-07-24 — Fase 4.2: el hallazgo "no existe mecanismo de ejecutar-al-aprobar" lo construye Claude Code primero, no Antigravity.** Al revisar el plan de Antigravity para Google Calendar/Gmail se detectó que ningún tool `confirm` anterior había tenido efectos reales (Canvas es todo `auto`; `sendEmail` se declaró en Fase 2.2 pero nunca se implementó) — por lo que `TelegramBotService.processApproval()` nunca ejecutaba nada, solo cambiaba estado y auditaba, y `pending_approvals` no guardaba el payload de la acción. Se le presentaron 2 opciones al owner: que Antigravity resolviera esto de forma acotada a sus 2 tools, o que Claude Code construyera el mecanismo genérico primero. Eligió que Claude Code lo construyera primero (mismo criterio que los prerequisitos de Fase 3.1: infraestructura compartida que futuras integraciones también necesitarán). Resultado: PR #8 (`ToolExecutorRegistry` + `ApprovalExecutionService`), ver detalle en la sección "Fase 4.2 — decisiones y prerequisitos".
+- **2026-07-25 — Fase 4.3: proveedor de embeddings de la memoria — OpenAI `text-embedding-3-large`, no Voyage AI.** BLUEPRINT §6.4 menciona ambas opciones para el corpus en pgvector (no construido todavía), pero no especifica nada para la memoria sqlite-vec — no había ninguna API key de ninguno de los dos en el proyecto. Se le presentaron 3 opciones al owner: reusar Gemini (`GEMINI_API_KEY` ya configurada, cero vendor nuevo), OpenAI, o Voyage AI. Eligió OpenAI explícitamente pese al costo de integración de un vendor nuevo (`OPENAI_API_KEY` nueva, SDK `openai` nuevo) — no la opción de menor fricción. Truncado a 1024 dimensiones (balance calidad/tamaño para un store ≤100k vectores). Vive en `src/memory/embedding-provider.ts`, no en `src/model-provider/` (esa capacidad es TaskProfile/chat-completion con budget guard; embeddings es aparte, sin riesgo "runaway").
 
 ## Plan aprobado
 
@@ -143,12 +145,25 @@ Los `"name": "temp-*"` de `package.json` en Web y CLI ya no aplican como pendien
 7. **Fase 2.4** [Antigravity] — ✅ hecho, PR #5 Yormun_Core (bot de Telegram).
 8. **Fase 4.1** [Claude Code] — ✅ hecho, PR #6 Yormun_Core (Budget guard + kill switch).
 9. **Fase 4.2** [Antigravity] — ✅ hecho, PR #9 Yormun_Core (Google Calendar + Gmail). Prerequisitos en PR #7 (tools de Calendar en registry.ts) y PR #8 (`ToolExecutorRegistry`/`ApprovalExecutionService`), ambos Claude Code. `canvasScheduleStudyBlock` desbloqueado.
+10. **Fase 4.3** [Claude Code] — ✅ hecho, PR #10 Yormun_Core (Memoria extendida del agente con sqlite-vec). Ver sección dedicada abajo.
 
-**Fin de la Fase 2, Fase 3.1, Fase 4.1 y Fase 4.2 del roadmap.** Pendiente: Fase 4.3 (Memoria sqlite-vec, Claude Code).
+**Fin de la Fase 2, Fase 3.1, Fase 4.1, Fase 4.2 y Fase 4.3 del roadmap.** Sin fases pendientes asignadas — a la espera de que el owner defina Fase 5+ (`docs/PROMPTS.md` aún no tiene prompts para esas fases).
 
 ## Bloqueados / esperando
 
 - Ejecución real del bootstrap en la VM OCI la hace el owner (Claude Code solo escribe manifests/scripts).
+
+## Fase 4.3 — resumen técnico (Yormun_Core PR #10, mergeado 2026-07-25)
+
+`src/memory/` (BLUEPRINT §3.3.1, PROMPTS.md §4.3), área exclusiva de Claude Code:
+
+- **`EmbeddingProvider`**: OpenAI `text-embedding-3-large` truncado a 1024 dims (decisión del owner, ver "Decisiones del owner"). Único consumidor de `OPENAI_API_KEY` (nueva).
+- **`MemoryStore`**: `better-sqlite3` + extensión `sqlite-vec` (`vec0`, `distance_metric=cosine`), WAL mode — único lugar del repo que importa ambas libs (restricción explícita de `PROMPTS.md`). KNN brute-force real (`k = COUNT(*)`, sin índice ANN — BLUEPRINT exige no depender de los índices ANN de sqlite-vec, siguen en alpha), filtros de metadata aplicados después del ranking completo. Detalle no obvio encontrado durante la implementación: el `rowid` debe bindearse como `BigInt` (no `number`) al insertar en una tabla `vec0` vía better-sqlite3 — verificado empíricamente, un `number` da `SqliteError: Only integers are allowed for primary key values`.
+- **`MemoryService`**: API pública `remember()`/`recall()`/`consolidate()`. Reusa `sanitizeForIndexing()` de `src/security/injection-sanitizer.ts` — esa función ya existía desde Fase 3.1/ADR 0004 explícitamente preparada para este momento ("sin consumidor todavía: `src/memory/**` no existe"), sin necesidad de tocar el sanitizer.
+- **`ConsolidationService`**: usa el TaskProfile `memory_consolidation` (ya declarado en `config/models.yaml` desde el bootstrap del repo) + `BudgetGuardedModelRouter`. Parseo del JSON de salida con Zod, falla ruidoso (`ConsolidationParseError`) ante formato inválido en vez de asumir una estructura.
+- 97.67% statements / 86.84% branches / 98.76% líneas en `src/memory/` (>85% exigido por `PROMPTS.md`). Incluye el test del criterio de éxito explícito: una preferencia consolidada en una sesión aparece en el `recall()` de la siguiente.
+
+**Handoff pendiente, documentado (no silencioso):** `consolidate()`/`recall()` no están conectados al ciclo de vida real de una sesión de Telegram (`src/telegram/**`) — `PROMPTS.md` §4.3 solo pedía el módulo con estas 3 firmas y tests de round-trip directos. Cuando se priorice, hace falta: llamar `recall()` al inicio de una conversación (inyectar las k entradas más relevantes al contexto) y `consolidate(sessionId, transcript)` al cierre — requiere que `TelegramBotService` importe `MemoryModule` (sin ciclo, `MemoryModule` no depende de Telegram) y decidir qué cuenta como "cierre de sesión" en un chat de Telegram sin un concepto explícito de sesión cerrada hoy. No asignado a nadie todavía.
 
 ## PR #9 (Google Calendar + Gmail): 3 rondas de revisión de código, mergeado 2026-07-24
 
