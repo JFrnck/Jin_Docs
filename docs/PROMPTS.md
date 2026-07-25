@@ -437,7 +437,7 @@ Escritos el 2026-07-25, con las Fases 1-4 ya mergeadas. Desviaciones del BLUEPRI
 - `Yormun_Web` y `Yormun_CLI` son los templates de scaffolding **sin tocar** desde Fase 2.1.
 - `Yormun_Infra` tiene la base (Postgres, Redis, Traefik, cloudflared, observabilidad, backups, RBAC del Executor) pero **ningún manifest de deploy** para core/executor/web, y no hay GitOps.
 
-Orden de dependencias: 5.1 → (5.2, 5.3 en paralelo) → 6.1 → (6.2, 6.3, 6.4 en paralelo) → 7.1 → 7.2 → 7.3. Mientras Claude Code hace 6.1, Antigravity puede avanzar 5.3; mientras Antigravity hace 6.2-6.4, Claude Code prepara 7.2/7.3.
+Orden de dependencias: 5.1 → (5.2, 5.3, 5.4 en paralelo — 5.4 es de Claude Code y 5.3 de Antigravity, sin colisión) → 6.1 → (6.2, 6.3, 6.4 en paralelo) → 7.1 → 7.2 → 7.3. Mientras Claude Code hace 5.4/6.1, Antigravity avanza 5.3; mientras Antigravity hace 6.2-6.4, Claude Code prepara 7.2/7.3.
 
 ---
 
@@ -458,8 +458,9 @@ TU TAREA:
 - Extender `src/model-provider/` para soportar tool-use nativo de ambos vendors (Anthropic tool use / Gemini function calling): `ModelCompletionRequest` gana declaración de tools y la response puede ser texto o tool-calls. Mantener compatibilidad con todos los callers actuales.
 - `src/agent/agent.service.ts` — el loop: LLM propone tool-call → `classifyToolCall()` decide el nivel → `auto`: ejecutar + `auditService.recordToolCall`; `notify`: ejecutar + auditar + notificar después; `confirm`/`dual-confirm`: `createPendingApproval({..., payload})` y el loop devuelve "en espera de aprobación" (la ejecución posterior ya existe: `ApprovalExecutionService`). El resultado de cada tool vuelve al contexto del LLM y el loop continúa hasta respuesta final o límite.
 - Un registro de invocación directa para tools `auto`/`notify` (los handlers reales viven en `src/integrations/**`, no puedes importarlos desde `src/agent/` sin ciclos — mismo patrón `onModuleInit()` + registro que `ToolExecutorRegistry`; evalúa unificar ambos registros o mantenerlos separados, y justifica).
-- Guardas duras: máximo de iteraciones por turno (configurable), todo pasa por `BudgetGuardedModelRouter` con un `sessionId` compartido por turno, y todo resultado de tool que contenga contenido externo se envuelve con el sanitizer antes de volver al contexto.
-- Tests: loop completo con LLM mockeado (auto ejecuta, confirm difiere y NO ejecuta, límite de iteraciones corta, inputs maliciosos en resultados de tools quedan envueltos).
+- **Ejecución autónoma orientada a objetivos (requisito del owner, 2026-07-25):** el loop no es solo "reaccionar al último resultado" — para tareas multi-paso el agente genera primero un plan explícito (lista de pasos, patrón plan-and-solve), lo persiste en el estado del turno, y va marcando pasos completados. Self-correction explícita: si una tool falla o el resultado no satisface el paso, el agente re-evalúa y reintenta con enfoque ajustado, con límite de reintentos por paso (configurable) además del límite global de iteraciones. El plan y su progreso son inspeccionables (se devuelven en la respuesta y quedan disponibles para las interfaces de Fase 6).
+- Guardas duras: máximo de iteraciones por turno y de reintentos por paso (configurables), todo pasa por `BudgetGuardedModelRouter` con un `sessionId` compartido por turno, y todo resultado de tool que contenga contenido externo se envuelve con el sanitizer antes de volver al contexto.
+- Tests: loop completo con LLM mockeado (auto ejecuta, confirm difiere y NO ejecuta, límite de iteraciones corta, fallo de tool → reintento ajustado → éxito, reintentos agotados → el agente reporta el fallo honestamente en vez de inventar éxito, inputs maliciosos en resultados de tools quedan envueltos).
 
 CRITERIOS DE ÉXITO:
 - Un turno simulado "borra mi evento X de mañana" produce una pending approval con payload correcto y NO borra nada.
@@ -538,6 +539,41 @@ RESTRICCIONES:
 - El contenido de mensajes entrantes sigue las reglas de sanitización de siempre.
 
 ANTES DE IMPLEMENTAR: Propón el plan, incluyendo tu decisión de cierre de sesión. Espera aprobación.
+```
+
+### 5.4 [CLAUDE CODE] — Orquestación multi-agente: sub-agentes coordinados (repo: Yormun_Core)
+
+```
+Vas a extender el agent loop (5.1, ya mergeado) para que el orquestador pueda descomponer un objetivo y delegarlo a DOS O MÁS sub-agentes que trabajan en paralelo y se coordinan sin discrepar. Requisito explícito del owner (2026-07-25). Es área de Claude Code (`src/agent/`) y requiere ADR nuevo: cambia el modelo de ejecución del sistema.
+
+DECISIÓN ARQUITECTÓNICA YA TOMADA POR EL OWNER (no la re-litigues, documentala en el ADR):
+Los sub-agentes NO se comunican directamente entre sí (peer-to-peer). Se coordinan vía el orquestador con estado compartido — patrón hub-and-spoke con un "task ledger" (blackboard): el orquestador descompone el objetivo en tareas con dependencias, cada sub-agente lee el ledger (qué hicieron los demás, qué decisiones ya se tomaron) y escribe sus resultados ahí. Razón: la comunicación libre A2A produce exactamente las discrepancias que se quieren evitar, multiplica el riesgo de loops runaway, y rompe el embudo único de HITL/audit. La coordinación por estado compartido mediado da consistencia (una sola fuente de verdad de decisiones) con las garantías intactas.
+
+ANTES DE ESCRIBIR CÓDIGO:
+1. Lee `../Yormun_Docs/docs/BLUEPRINT.md` secciones 6 y 9, y los ADRs existentes en `../Yormun_Docs/docs/adr/`.
+2. Lee el código real de `src/agent/` (el loop de 5.1 es la unidad que vas a instanciar N veces), `src/budget/budget-guarded-router.service.ts`, `src/audit/audit.service.ts`.
+3. Revisa `../Yormun_Docs/STATUS.md`.
+
+TU TAREA:
+- `src/agent/orchestrator.service.ts` — descompone el objetivo en un task ledger (tareas, dependencias, estado: pending/in-progress/done/failed), asigna cada tarea a un sub-agente, resuelve el orden por dependencias (paralelo cuando no hay dependencia), y al final reconcilia los resultados en una respuesta única. Si dos resultados se contradicen, el orquestador lo detecta y lanza una pasada de reconciliación (con el ledger completo como contexto) en vez de elegir silenciosamente.
+- Sub-agente = instancia del agent loop de 5.1 con: (a) subset acotado de tools (el orquestador decide cuáles según la tarea — nunca más de las necesarias), (b) `sessionId` propio derivado del turno padre (el budget guard ve a cada sub-agente y el cap diario/kill switch aplican globalmente), (c) sus propios límites de iteraciones/reintentos, (d) acceso de LECTURA al ledger y escritura solo de sus propias entradas.
+- HITL intacto: un tool `confirm`/`dual-confirm` invocado por un sub-agente crea la misma pending approval de siempre, con atribución de QUÉ sub-agente y QUÉ tarea del ledger la originó (visible en el planSummary y en el audit log — extiende `actor` o agrega metadata, justifica en el ADR). El sub-agente queda bloqueado en esa tarea hasta resolución; el orquestador puede seguir con tareas independientes.
+- Audit: cada acción registra qué agente la ejecutó. El ledger completo del turno queda inspeccionable (para las interfaces de Fase 6).
+- Escribir el ADR (siguiente número libre) con el diseño completo.
+- Tests: descomposición con dependencias respeta el orden; tareas independientes corren en paralelo; contradicción entre sub-agentes dispara reconciliación; un confirm de un sub-agente NO bloquea tareas independientes; el kill switch a mitad de un turno multi-agente detiene TODO; presupuesto agregado del turno = suma de sub-agentes.
+
+CRITERIOS DE ÉXITO:
+- Un objetivo simulado tipo "revisa mi correo y mi calendario y proponme la agenda de mañana" se descompone en 2+ tareas, corre con 2 sub-agentes coordinados por el ledger, y produce UNA respuesta coherente sin contradicciones.
+- Ninguna vía por la que un sub-agente ejecute algo confirm sin aprobación, ni por la que dos sub-agentes se manden instrucciones directamente.
+- Cobertura >85% en lo nuevo. CI verde en real. Actualiza `../Yormun_Docs/STATUS.md`.
+
+RESTRICCIONES:
+- Máximo de sub-agentes concurrentes configurable (default bajo: 3). Profundidad de delegación = 1 (un sub-agente NO puede crear más sub-agentes — evita árboles runaway; si algún día hace falta, es otro ADR).
+- Todo lo de 5.1 sigue aplicando: sanitización, hitlLevel estático, budget, límites.
+
+USA CLAUDE OPUS 4.8 (diseño de concurrencia + modelo de seguridad).
+
+ANTES DE IMPLEMENTAR: Propón el plan y el borrador del ADR. Espera aprobación.
 ```
 
 ---

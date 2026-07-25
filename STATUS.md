@@ -131,6 +131,7 @@ Los `"name": "temp-*"` de `package.json` en Web y CLI ya no aplican como pendien
 - **2026-07-24 — Fase 4.2: OAuth scopes confirmados por el owner.** `calendar` (lectura/escritura de eventos), `gmail.readonly` (leer correos), `gmail.send` (enviar/responder) — los 3 mínimos necesarios para las tools ya declaradas, sin scopes de administración ni de otras APIs de Workspace.
 - **2026-07-24 — Fase 4.2: el gap de "reset de la alerta de OAuth" se corrige antes de mergear PR #9, no se acepta como deuda.** Al revisar el PR se encontró que `updateLastRefreshedAt()` no tenía ningún caller real y la alerta de vencimiento solo logueaba (nunca le llegaba nada al owner). Se le presentaron 2 opciones: mergear igual y dejarlo como follow-up, o pedirle a Antigravity un fix acotado antes de mergear. Eligió lo segundo — mismo criterio que otras veces con hallazgos de seguridad/HITL: si el fix es chico y acotado, se resuelve antes de dar la fase por cerrada en vez de acumular deuda. Resultado: comando `/google-oauth-refreshed` + alerta proactiva real, ver "PR #9 (Google Calendar + Gmail): 3 rondas de revisión".
 - **2026-07-24 — Fase 4.2: el hallazgo "no existe mecanismo de ejecutar-al-aprobar" lo construye Claude Code primero, no Antigravity.** Al revisar el plan de Antigravity para Google Calendar/Gmail se detectó que ningún tool `confirm` anterior había tenido efectos reales (Canvas es todo `auto`; `sendEmail` se declaró en Fase 2.2 pero nunca se implementó) — por lo que `TelegramBotService.processApproval()` nunca ejecutaba nada, solo cambiaba estado y auditaba, y `pending_approvals` no guardaba el payload de la acción. Se le presentaron 2 opciones al owner: que Antigravity resolviera esto de forma acotada a sus 2 tools, o que Claude Code construyera el mecanismo genérico primero. Eligió que Claude Code lo construyera primero (mismo criterio que los prerequisitos de Fase 3.1: infraestructura compartida que futuras integraciones también necesitarán). Resultado: PR #8 (`ToolExecutorRegistry` + `ApprovalExecutionService`), ver detalle en la sección "Fase 4.2 — decisiones y prerequisitos".
+- **2026-07-25 — Ejecución autónoma orientada a objetivos + multi-agente: requisito nuevo del owner, incorporado al roadmap.** El owner pidió explícitamente (a) que el agente itere sobre sí mismo con plan-and-solve y self-correction (incorporado como requisito de Fase 5.1, no fase aparte — es la naturaleza del mismo loop), y (b) que el orquestador pueda delegar a dos o más sub-agentes que se coordinen sin discrepar (Fase 5.4 nueva). Decisión de diseño fijada: los sub-agentes NO se comunican peer-to-peer — se coordinan vía el orquestador con un task ledger compartido (hub-and-spoke/blackboard), porque la comunicación libre A2A produce exactamente las discrepancias que se quieren evitar, multiplica el riesgo runaway y rompe el embudo único de HITL/audit. Profundidad de delegación = 1 (un sub-agente no crea sub-agentes). Requiere ADR nuevo al implementarse.
 - **2026-07-25 — Fase 4.3: proveedor de embeddings de la memoria — OpenAI `text-embedding-3-large`, no Voyage AI.** BLUEPRINT §6.4 menciona ambas opciones para el corpus en pgvector (no construido todavía), pero no especifica nada para la memoria sqlite-vec — no había ninguna API key de ninguno de los dos en el proyecto. Se le presentaron 3 opciones al owner: reusar Gemini (`GEMINI_API_KEY` ya configurada, cero vendor nuevo), OpenAI, o Voyage AI. Eligió OpenAI explícitamente pese al costo de integración de un vendor nuevo (`OPENAI_API_KEY` nueva, SDK `openai` nuevo) — no la opción de menor fricción. Truncado a 1024 dimensiones (balance calidad/tamaño para un store ≤100k vectores). Vive en `src/memory/embedding-provider.ts`, no en `src/model-provider/` (esa capacidad es TaskProfile/chat-completion con budget guard; embeddings es aparte, sin riesgo "runaway").
 
 ## Plan aprobado
@@ -151,18 +152,19 @@ Los `"name": "temp-*"` de `package.json` en Web y CLI ya no aplican como pendien
 
 **Roadmap extendido (2026-07-25, prompts ya escritos en `docs/PROMPTS.md` — Fase 5+):** el owner pidió planificar el cierre completo del proyecto. Los prompts nuevos asumen las desviaciones reales ya decididas (sin BullMQ, sin Alertmanager, mecanismo aprobar→ejecutar del PR #8) — leer el bloque "Contexto de realidad del código" en PROMPTS.md antes de usarlos:
 
-11. **Fase 5.1** [Claude Code] — Agent loop con tool-calling (`src/agent/`, Yormun_Core). **El prerequisito de todo lo demás**: hoy el LLM nunca invoca tools.
+11. **Fase 5.1** [Claude Code] — Agent loop con tool-calling + plan-and-solve + self-correction (`src/agent/`, Yormun_Core). **El prerequisito de todo lo demás**: hoy el LLM nunca invoca tools.
 12. **Fase 5.2** [Claude Code] — `runCode` end-to-end + Modal real (Yormun_Core + Yormun_Executor).
 13. **Fase 5.3** [Antigravity] — Sesiones reales en Telegram: agent loop + memoria (`src/telegram/**`).
-14. **Fase 6.1** [Claude Code] — Auth JWT single-user + API REST/WebSocket para interfaces (Yormun_Core).
-15. **Fase 6.2** [Antigravity] — Web Dashboard MVP (Yormun_Web — hoy es el template sin tocar).
-16. **Fase 6.3** [Antigravity] — Monaco + Zone Widgets + applets (Yormun_Web).
-17. **Fase 6.4** [Antigravity] — CLI con Ink (Yormun_CLI — hoy es el template sin tocar).
-18. **Fase 7.1** [Antigravity] — Deploy real de las apps + Flux GitOps (Yormun_Infra + Dockerfiles).
-19. **Fase 7.2** [Claude Code] — Runbook de activación real (secretos reales, OAuth consent, webhook Telegram, smoke test E2E).
-20. **Fase 7.3** [Claude Code] — Hardening: auditoría de seguridad completa, chaos tests, MCP servers.
+14. **Fase 5.4** [Claude Code] — Orquestación multi-agente: sub-agentes coordinados vía task ledger (`src/agent/`, requiere ADR nuevo).
+15. **Fase 6.1** [Claude Code] — Auth JWT single-user + API REST/WebSocket para interfaces (Yormun_Core).
+16. **Fase 6.2** [Antigravity] — Web Dashboard MVP (Yormun_Web — hoy es el template sin tocar).
+17. **Fase 6.3** [Antigravity] — Monaco + Zone Widgets + applets (Yormun_Web).
+18. **Fase 6.4** [Antigravity] — CLI con Ink (Yormun_CLI — hoy es el template sin tocar).
+19. **Fase 7.1** [Antigravity] — Deploy real de las apps + Flux GitOps (Yormun_Infra + Dockerfiles).
+20. **Fase 7.2** [Claude Code] — Runbook de activación real (secretos reales, OAuth consent, webhook Telegram, smoke test E2E).
+21. **Fase 7.3** [Claude Code] — Hardening: auditoría de seguridad completa, chaos tests, MCP servers.
 
-Dependencias: 5.1 → (5.2, 5.3) → 6.1 → (6.2, 6.3, 6.4) → 7.1 → 7.2 → 7.3. Paralelismo natural: Antigravity avanza 5.3 mientras Claude Code hace 6.1; Antigravity hace 6.2-6.4 mientras Claude Code prepara 7.2/7.3. **Siguiente acción: Fase 5.1 (Claude Code).**
+Dependencias: 5.1 → (5.2, 5.3, 5.4) → 6.1 → (6.2, 6.3, 6.4) → 7.1 → 7.2 → 7.3. Paralelismo natural: Antigravity avanza 5.3 mientras Claude Code hace 5.4/6.1; Antigravity hace 6.2-6.4 mientras Claude Code prepara 7.2/7.3. **Siguiente acción: Fase 5.1 (Claude Code).**
 
 ## Bloqueados / esperando
 
