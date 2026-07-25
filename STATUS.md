@@ -1,6 +1,6 @@
 # STATUS
 
-## Última actualización: 2026-07-25 (America/Lima) — actualización 7
+## Última actualización: 2026-07-25 (America/Lima) — actualización 8
 
 > **Antigravity ya está activo** (ver abajo, Fase 3.1/2.4/4.2). Retoma ownership normal de `docs/WORKFLOW.md` sección 2 — Claude Code ya no asume tareas `[ANTIGRAVITY]` por defecto, salvo negociación puntual vía esta misma nota.
 
@@ -9,15 +9,15 @@
 ### Claude Code
 
 - **Repo:** ninguno activo ahora mismo.
-- **Descripción:** Fase 4.1 (Budget guard + kill switch) completa — [PR #6](https://github.com/JFrnck/Yormun_Core/pull/6), **mergeado**. Prerequisito "ejecutar al aprobar" completo — [PR #8](https://github.com/JFrnck/Yormun_Core/pull/8), **mergeado**. Revisión de 3 rondas + merge de [PR #9](https://github.com/JFrnck/Yormun_Core/pull/9) (Fase 4.2, Antigravity). Fase 4.3 (Memoria extendida sqlite-vec) completa — [PR #10](https://github.com/JFrnck/Yormun_Core/pull/10), **mergeado**. Roadmap Fase 5-7 planificado y prompts escritos en `docs/PROMPTS.md` (2026-07-25).
-- **Próximo:** Fase 5.1 — agent loop con tool-calling (`src/agent/`, prerequisito de todo el resto del roadmap).
+- **Descripción:** Fase 4.1 (Budget guard + kill switch) completa — [PR #6](https://github.com/JFrnck/Yormun_Core/pull/6), **mergeado**. Prerequisito "ejecutar al aprobar" completo — [PR #8](https://github.com/JFrnck/Yormun_Core/pull/8), **mergeado**. Revisión de 3 rondas + merge de [PR #9](https://github.com/JFrnck/Yormun_Core/pull/9) (Fase 4.2, Antigravity). Fase 4.3 (Memoria extendida sqlite-vec) completa — [PR #10](https://github.com/JFrnck/Yormun_Core/pull/10), **mergeado**. Roadmap Fase 5-7 planificado y prompts escritos en `docs/PROMPTS.md` (2026-07-25), incluida la Fase 5.4 (multi-agente) agregada a pedido del owner. Fase 5.1 (agent loop) completa — [PR #11](https://github.com/JFrnck/Yormun_Core/pull/11), **mergeado**. Ver detalle abajo.
+- **Próximo:** ninguno activo — Fase 5.2 (`runCode` + Modal real) y Fase 5.4 (multi-agente) quedan libres para arrancar, ambas requieren 5.1 (ya hecho).
 
 ### Antigravity
 
 - **Repo:** Yormun_Core
 - **Rama:** `feature/antigravity/google-workspace` — [PR #9](https://github.com/JFrnck/Yormun_Core/pull/9), **mergeado a `main`, rama borrada**.
 - **Descripción:** Fase 4.2 completa — Google Calendar + Gmail (`src/integrations/google/`). **Fin de Fase 4.2.**
-- **Estado:** 🟢 Sin tarea activa — a la espera de la siguiente fase que le asigne el owner (no hay ninguna en el roadmap actual asignada a Antigravity; Fase 4.3 es de Claude Code).
+- **Estado:** 🟢 Sin tarea activa — **Fase 5.3 (sesiones reales en Telegram + memoria) ya está desbloqueada**, requiere Fase 5.1 (agent loop, mergeado en [PR #11](https://github.com/JFrnck/Yormun_Core/pull/11)) — leer el prompt de 5.3 en `docs/PROMPTS.md` antes de arrancar, especialmente el contrato de registro de tools que documenta la sección "Fase 5.1 — resumen técnico" abajo.
 - **Archivos creados/modificados:** `src/integrations/google/` (`GoogleOAuthService` con `getDaysSinceLastRefresh()`, Calendar client/tools, Gmail client/tools con sanitización anti-CRLF en `to`/`subject`), migración `drizzle/0003_google_oauth_state.sql` + `.down.sql`, `GoogleModule` registrando executors en `ToolExecutorRegistry`, comando `/google-oauth-refreshed` + alerta proactiva a Telegram cuando `days >= 6` (con dedupe diario). 193 tests unitarios + 40 de integración en Postgres real + e2e, CI GitHub Actions verde — **verificado independientemente por Claude Code en 3 rondas de revisión** (ver sección de feedback abajo), no solo el self-report.
 
 
@@ -107,6 +107,7 @@ Lo que el plan sí acierta: los 3 niveles HITL coinciden con blueprint/PROMPTS, 
 | Yormun_Core | [#8](https://github.com/JFrnck/Yormun_Core/pull/8) | Prerequisito Fase 4.2: mecanismo "ejecutar al aprobar" (`ToolExecutorRegistry` + `ApprovalExecutionService`) | ✅ mergeado |
 | Yormun_Core | [#9](https://github.com/JFrnck/Yormun_Core/pull/9) | Fase 4.2: integración Google Calendar + Gmail (OAuth Testing, rate limiting, sanitización, diferido HITL) | ✅ mergeado (3 rondas de revisión, ver feedback abajo) |
 | Yormun_Core | [#10](https://github.com/JFrnck/Yormun_Core/pull/10) | Fase 4.3: memoria extendida del agente con sqlite-vec | ✅ mergeado |
+| Yormun_Core | [#11](https://github.com/JFrnck/Yormun_Core/pull/11) | Fase 5.1: agent loop con tool-calling, plan-and-solve y self-correction | ✅ mergeado |
 
 **Nota — Yormun_Infra #2 se reemplazó por #3:** al mergear #1 con `--delete-branch`, GitHub cerró automáticamente #2 porque su rama base (`feature/claude/infra-base`, la de #1) dejó de existir — efecto colateral no documentado de GitHub en PRs apilados, no una acción intencional. Un PR cerrado así no se puede reabrir ni re-apuntar vía API una vez cerrado. Recuperado abriendo #3 desde la misma rama head (`feature/claude/infra-backups`, intacta) directo contra `main`; contenido idéntico (26 archivos, 1128 inserciones), CI verde, mergeado normalmente.
 
@@ -154,10 +155,10 @@ Los `"name": "temp-*"` de `package.json` en Web y CLI ya no aplican como pendien
 
 **Roadmap extendido (2026-07-25, prompts ya escritos en `docs/PROMPTS.md` — Fase 5+):** el owner pidió planificar el cierre completo del proyecto. Los prompts nuevos asumen las desviaciones reales ya decididas (sin BullMQ, sin Alertmanager, mecanismo aprobar→ejecutar del PR #8) — leer el bloque "Contexto de realidad del código" en PROMPTS.md antes de usarlos:
 
-11. **Fase 5.1** [Claude Code] — Agent loop con tool-calling + plan-and-solve + self-correction (`src/agent/`, Yormun_Core). **El prerequisito de todo lo demás**: hoy el LLM nunca invoca tools.
-12. **Fase 5.2** [Claude Code] — `runCode` end-to-end + Modal real (Yormun_Core + Yormun_Executor).
-13. **Fase 5.3** [Antigravity] — Sesiones reales en Telegram: agent loop + memoria (`src/telegram/**`).
-14. **Fase 5.4** [Claude Code] — Orquestación multi-agente: sub-agentes coordinados vía task ledger estilo Jira persistido en Postgres (`src/agent/`, requiere ADR nuevo).
+11. **Fase 5.1** [Claude Code] — ✅ hecho, PR #11 Yormun_Core (Agent loop con tool-calling + plan-and-solve + self-correction). Ver sección dedicada abajo. **Era el prerequisito de todo lo demás** — ya desbloqueado.
+12. **Fase 5.2** [Claude Code] — `runCode` end-to-end + Modal real (Yormun_Core + Yormun_Executor). Desbloqueado, sin arrancar.
+13. **Fase 5.3** [Antigravity] — Sesiones reales en Telegram: agent loop + memoria (`src/telegram/**`). Desbloqueado, sin arrancar.
+14. **Fase 5.4** [Claude Code] — Orquestación multi-agente: sub-agentes coordinados vía task ledger estilo Jira persistido en Postgres (`src/agent/`, requiere ADR nuevo). Desbloqueado, sin arrancar.
 15. **Fase 5.5** [Claude Code] — Pods de servicio: preview apps con puertos expuestos (`npm run dev`, backends) bajo `*.yormungander.com` con TTL (Yormun_Executor + Core + Infra, requiere ADR).
 16. **Fase 6.1** [Claude Code] — Auth JWT single-user + API REST/WebSocket para interfaces (Yormun_Core).
 17. **Fase 6.2** [Antigravity] — Web Dashboard MVP (Yormun_Web — hoy es el template sin tocar).
@@ -167,11 +168,21 @@ Los `"name": "temp-*"` de `package.json` en Web y CLI ya no aplican como pendien
 21. **Fase 7.2** [Claude Code] — Runbook de activación real (secretos reales, OAuth consent, webhook Telegram, smoke test E2E).
 22. **Fase 7.3** [Claude Code] — Hardening: auditoría de seguridad completa, chaos tests, MCP servers.
 
-Dependencias: 5.1 → (5.2, 5.3, 5.4) → 5.5 (tras 5.2) → 6.1 → (6.2, 6.3, 6.4) → 7.1 → 7.2 → 7.3. Paralelismo natural: Antigravity avanza 5.3 mientras Claude Code hace 5.4/5.5/6.1; Antigravity hace 6.2-6.4 mientras Claude Code prepara 7.2/7.3. **Siguiente acción: Fase 5.1 (Claude Code).**
+Dependencias: 5.1 → (5.2, 5.3, 5.4) → 5.5 (tras 5.2) → 6.1 → (6.2, 6.3, 6.4) → 7.1 → 7.2 → 7.3. Paralelismo natural: Antigravity avanza 5.3 mientras Claude Code hace 5.4/5.5/6.1; Antigravity hace 6.2-6.4 mientras Claude Code prepara 7.2/7.3. **Fase 5.1 hecha — siguiente: 5.2/5.3/5.4 en paralelo (Antigravity toma 5.3, Claude Code elige entre 5.2/5.4).**
 
 ## Bloqueados / esperando
 
 - Ejecución real del bootstrap en la VM OCI la hace el owner (Claude Code solo escribe manifests/scripts).
+
+## Fase 5.1 — resumen técnico (Yormun_Core PR #11, mergeado 2026-07-25)
+
+`src/agent/` (BLUEPRINT §6, requisito del owner 2026-07-25: ejecución autónoma orientada a objetivos), área de Claude Code. El agent loop: el LLM ahora puede invocar tools de verdad, con plan-and-solve (2 meta-tools `declarePlan`/`updatePlanStep`, manejadas inline, nunca pasan por HITL) y self-correction (cap de fallos consecutivos por tool+args exactos, no por paso del plan).
+
+**Cambios de contrato en `src/model-provider/`** (afecta a cualquiera que llame `ModelRouterService`/`BudgetGuardedModelRouter`, pero de forma retrocompatible): `ModelMessage.content` ahora acepta `string | bloques[]` (todo caller existente sigue pasando `string` sin cambios), `ModelCompletionResponse` ganó `stopReason` (requerido) y `toolCalls` (opcional). Si en Fase 5.3 tocás código que construye un `ModelCompletionResponse` a mano en un test, va a pedir `stopReason`.
+
+**Contrato de registro para Fase 5.3 (Antigravity):** el agent loop arma su lista de tools desde `listRegisteredTools()` (`src/tools/registry.ts`, ahora con `inputSchema` por tool) y ejecuta/difiere vía `ToolExecutorRegistry` — el mismo registro que ya usás desde Fase 4.2 para `sendEmail`/`deleteCalendarEventFuture` (PR #8). La única diferencia: antes solo importaba para tools `confirm`, ahora el loop también lo usa para invocación INMEDIATA de tools `auto`/`notify`. Para que tus integraciones (Canvas, Google) queden disponibles al agente, cada módulo debe registrar TODAS sus tools (no solo las confirm) en `toolExecutorRegistry.register(nombre, executor)` dentro de su `onModuleInit()` — hoy solo `sendEmail`/`deleteCalendarEventFuture` están registradas; `readEmails`, `listCalendarEvents`, `createCalendarEvent`, etc. todavía no tienen executor, así que si el agente las invoca hoy, falla con `NoExecutorRegisteredError` (fail-safe, no fail-silent).
+
+**Fuera de alcance, documentado:** el plan es transient (no persiste en Postgres — eso es el ledger de Fase 5.4), no hay multi-agente, y no está conectado a Telegram todavía (Fase 5.3).
 
 ## Fase 4.3 — resumen técnico (Yormun_Core PR #10, mergeado 2026-07-25)
 
