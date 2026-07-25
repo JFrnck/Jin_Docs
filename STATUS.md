@@ -9,8 +9,8 @@
 ### Claude Code
 
 - **Repo:** ninguno activo ahora mismo.
-- **Descripción:** Fase 4.1 (Budget guard + kill switch) completa — [PR #6](https://github.com/JFrnck/Yormun_Core/pull/6), **mergeado**. Prerequisito "ejecutar al aprobar" completo — [PR #8](https://github.com/JFrnck/Yormun_Core/pull/8), **mergeado**. Revisión de 3 rondas + merge de [PR #9](https://github.com/JFrnck/Yormun_Core/pull/9) (Fase 4.2, Antigravity). Fase 4.3 (Memoria extendida sqlite-vec) completa — [PR #10](https://github.com/JFrnck/Yormun_Core/pull/10), **mergeado**. Ver detalle abajo.
-- **Próximo:** ninguno pendiente en el roadmap actual — Fase 2, 3.1, 4.1, 4.2 y 4.3 cerradas. A la espera de que el owner defina Fase 5+.
+- **Descripción:** Fase 4.1 (Budget guard + kill switch) completa — [PR #6](https://github.com/JFrnck/Yormun_Core/pull/6), **mergeado**. Prerequisito "ejecutar al aprobar" completo — [PR #8](https://github.com/JFrnck/Yormun_Core/pull/8), **mergeado**. Revisión de 3 rondas + merge de [PR #9](https://github.com/JFrnck/Yormun_Core/pull/9) (Fase 4.2, Antigravity). Fase 4.3 (Memoria extendida sqlite-vec) completa — [PR #10](https://github.com/JFrnck/Yormun_Core/pull/10), **mergeado**. Roadmap Fase 5-7 planificado y prompts escritos en `docs/PROMPTS.md` (2026-07-25).
+- **Próximo:** Fase 5.1 — agent loop con tool-calling (`src/agent/`, prerequisito de todo el resto del roadmap).
 
 ### Antigravity
 
@@ -147,7 +147,22 @@ Los `"name": "temp-*"` de `package.json` en Web y CLI ya no aplican como pendien
 9. **Fase 4.2** [Antigravity] — ✅ hecho, PR #9 Yormun_Core (Google Calendar + Gmail). Prerequisitos en PR #7 (tools de Calendar en registry.ts) y PR #8 (`ToolExecutorRegistry`/`ApprovalExecutionService`), ambos Claude Code. `canvasScheduleStudyBlock` desbloqueado.
 10. **Fase 4.3** [Claude Code] — ✅ hecho, PR #10 Yormun_Core (Memoria extendida del agente con sqlite-vec). Ver sección dedicada abajo.
 
-**Fin de la Fase 2, Fase 3.1, Fase 4.1, Fase 4.2 y Fase 4.3 del roadmap.** Sin fases pendientes asignadas — a la espera de que el owner defina Fase 5+ (`docs/PROMPTS.md` aún no tiene prompts para esas fases).
+**Fin de la Fase 2, Fase 3.1, Fase 4.1, Fase 4.2 y Fase 4.3 del roadmap.**
+
+**Roadmap extendido (2026-07-25, prompts ya escritos en `docs/PROMPTS.md` — Fase 5+):** el owner pidió planificar el cierre completo del proyecto. Los prompts nuevos asumen las desviaciones reales ya decididas (sin BullMQ, sin Alertmanager, mecanismo aprobar→ejecutar del PR #8) — leer el bloque "Contexto de realidad del código" en PROMPTS.md antes de usarlos:
+
+11. **Fase 5.1** [Claude Code] — Agent loop con tool-calling (`src/agent/`, Yormun_Core). **El prerequisito de todo lo demás**: hoy el LLM nunca invoca tools.
+12. **Fase 5.2** [Claude Code] — `runCode` end-to-end + Modal real (Yormun_Core + Yormun_Executor).
+13. **Fase 5.3** [Antigravity] — Sesiones reales en Telegram: agent loop + memoria (`src/telegram/**`).
+14. **Fase 6.1** [Claude Code] — Auth JWT single-user + API REST/WebSocket para interfaces (Yormun_Core).
+15. **Fase 6.2** [Antigravity] — Web Dashboard MVP (Yormun_Web — hoy es el template sin tocar).
+16. **Fase 6.3** [Antigravity] — Monaco + Zone Widgets + applets (Yormun_Web).
+17. **Fase 6.4** [Antigravity] — CLI con Ink (Yormun_CLI — hoy es el template sin tocar).
+18. **Fase 7.1** [Antigravity] — Deploy real de las apps + Flux GitOps (Yormun_Infra + Dockerfiles).
+19. **Fase 7.2** [Claude Code] — Runbook de activación real (secretos reales, OAuth consent, webhook Telegram, smoke test E2E).
+20. **Fase 7.3** [Claude Code] — Hardening: auditoría de seguridad completa, chaos tests, MCP servers.
+
+Dependencias: 5.1 → (5.2, 5.3) → 6.1 → (6.2, 6.3, 6.4) → 7.1 → 7.2 → 7.3. Paralelismo natural: Antigravity avanza 5.3 mientras Claude Code hace 6.1; Antigravity hace 6.2-6.4 mientras Claude Code prepara 7.2/7.3. **Siguiente acción: Fase 5.1 (Claude Code).**
 
 ## Bloqueados / esperando
 

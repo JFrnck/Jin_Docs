@@ -423,9 +423,313 @@ Propón el schema y las firmas de la API. Espera aprobación.
 
 ---
 
-## Fase 5+ — Fases posteriores
+## Fase 5+ — Contexto de realidad del código (leer antes de usar estos prompts)
 
-Los prompts de las fases 5-7 (pods bajo demanda + Modal, interfaces avanzadas, hardening) se añaden a este documento cuando llegue el momento, siguiendo la misma estructura.
+Escritos el 2026-07-25, con las Fases 1-4 ya mergeadas. Desviaciones del BLUEPRINT ya decididas y documentadas en `STATUS.md` que estos prompts asumen (no las "re-arregles"):
+
+- **No hay BullMQ** en ningún repo: todos los jobs usan `@nestjs/schedule` (`@Cron`). No lo introduzcas.
+- **No hay Alertmanager**: las alertas van directo de `Yormun_Core` al bot de Telegram (decisión del owner, Fase 4.1).
+- **No existe agent loop todavía**: el handler de texto libre de Telegram llama `chat_conversational` sin tools. La Fase 5.1 lo construye — es el prerequisito de casi todo lo demás.
+- **No existe auth ni API REST/WS** para interfaces: `Yormun_Core` solo expone el webhook de Telegram y `/metrics`. La Fase 6.1 la construye.
+- **Ya existe** el mecanismo "aprobar → ejecutar" (`ToolExecutorRegistry` + `ApprovalExecutionService`, `src/hitl/`, PR #8): las tools `confirm`/`dual-confirm` difieren su ejecución creando una pending approval con `payload`, y la ejecución real ocurre al aprobar desde Telegram. Todo tool nuevo con efectos reales se enchufa ahí, no inventa su propio flujo.
+- **Ya existe** memoria extendida (`src/memory/`, PR #10) con `remember()`/`recall()`/`consolidate()` — sin conectar aún al ciclo de vida de sesiones (Fase 5.3).
+- `Yormun_Executor` tiene RBAC + ejecución aislada en pods Deno funcionando (testcontainers K3s real); **Modal es un stub** (`ModalNotImplementedError`) y **la tool `runCode` no está declarada** en `registry.ts`.
+- `Yormun_Web` y `Yormun_CLI` son los templates de scaffolding **sin tocar** desde Fase 2.1.
+- `Yormun_Infra` tiene la base (Postgres, Redis, Traefik, cloudflared, observabilidad, backups, RBAC del Executor) pero **ningún manifest de deploy** para core/executor/web, y no hay GitOps.
+
+Orden de dependencias: 5.1 → (5.2, 5.3 en paralelo) → 6.1 → (6.2, 6.3, 6.4 en paralelo) → 7.1 → 7.2 → 7.3. Mientras Claude Code hace 6.1, Antigravity puede avanzar 5.3; mientras Antigravity hace 6.2-6.4, Claude Code prepara 7.2/7.3.
+
+---
+
+## Fase 5 — Agent loop + ejecución aislada real
+
+### 5.1 [CLAUDE CODE] — Agent loop con tool-calling (repo: Yormun_Core)
+
+```
+Vas a construir el agent loop: la pieza que convierte a Yormun de "chat que responde texto" en un orquestador que INVOCA tools. Hoy ninguna tool se dispara desde el LLM — los handlers existen (Canvas, Google) pero nadie los llama. Trabajas en el repo `Yormun_Core`, en `src/agent/` (área nueva, la lidera Claude Code: compone hitl + tools + model-provider + budget, todas áreas tuyas).
+
+ANTES DE ESCRIBIR CÓDIGO:
+1. Lee `../Yormun_Docs/docs/BLUEPRINT.md` secciones 6 (Modelos y ruteo) y 9 (HITL) completas.
+2. Lee `../Yormun_Docs/AGENTS.md` sección 5 completa (seguridad — especialmente 5.1 y 5.4).
+3. Lee en el código real: `src/hitl/classifier.ts`, `src/hitl/tool-executor.registry.ts`, `src/hitl/approval-execution.service.ts`, `src/hitl/dual-confirm.service.ts`, `src/tools/registry.ts`, `src/budget/budget-guarded-router.service.ts`, `src/model-provider/model-provider.types.ts`.
+4. Revisa `../Yormun_Docs/STATUS.md`.
+
+TU TAREA:
+- Extender `src/model-provider/` para soportar tool-use nativo de ambos vendors (Anthropic tool use / Gemini function calling): `ModelCompletionRequest` gana declaración de tools y la response puede ser texto o tool-calls. Mantener compatibilidad con todos los callers actuales.
+- `src/agent/agent.service.ts` — el loop: LLM propone tool-call → `classifyToolCall()` decide el nivel → `auto`: ejecutar + `auditService.recordToolCall`; `notify`: ejecutar + auditar + notificar después; `confirm`/`dual-confirm`: `createPendingApproval({..., payload})` y el loop devuelve "en espera de aprobación" (la ejecución posterior ya existe: `ApprovalExecutionService`). El resultado de cada tool vuelve al contexto del LLM y el loop continúa hasta respuesta final o límite.
+- Un registro de invocación directa para tools `auto`/`notify` (los handlers reales viven en `src/integrations/**`, no puedes importarlos desde `src/agent/` sin ciclos — mismo patrón `onModuleInit()` + registro que `ToolExecutorRegistry`; evalúa unificar ambos registros o mantenerlos separados, y justifica).
+- Guardas duras: máximo de iteraciones por turno (configurable), todo pasa por `BudgetGuardedModelRouter` con un `sessionId` compartido por turno, y todo resultado de tool que contenga contenido externo se envuelve con el sanitizer antes de volver al contexto.
+- Tests: loop completo con LLM mockeado (auto ejecuta, confirm difiere y NO ejecuta, límite de iteraciones corta, inputs maliciosos en resultados de tools quedan envueltos).
+
+CRITERIOS DE ÉXITO:
+- Un turno simulado "borra mi evento X de mañana" produce una pending approval con payload correcto y NO borra nada.
+- Un turno "lista mis eventos" ejecuta la tool auto, audita, y la respuesta final del LLM incorpora el resultado.
+- El `hitlLevel` sale EXCLUSIVAMENTE de `classifyToolCall` — ningún camino donde el LLM lo influya.
+- `npx tsc --noEmit -p tsconfig.json`, lint, tests y CI verdes. Cobertura >85% en `src/agent/`.
+- Actualiza `../Yormun_Docs/STATUS.md` al empezar y al terminar, documentando el contrato de registro para que Antigravity enchufe sus handlers (Fase 5.3).
+
+RESTRICCIONES:
+- NO conectes Telegram todavía (eso es 5.3, área de Antigravity). Expón `AgentService` desde un `AgentModule` y ya.
+- NO toques los handlers de `src/integrations/**`.
+- Prohibido un `switch(toolName)` hardcodeado en `src/agent/` — registro dinámico o nada.
+
+USA CLAUDE OPUS 4.8 para el diseño del loop y del contrato de registro; Sonnet para los tests mecánicos.
+
+ANTES DE IMPLEMENTAR: Propón el plan (diseño del loop, cambios a model-provider, decisión sobre los registros). Espera aprobación.
+```
+
+### 5.2 [CLAUDE CODE] — runCode end-to-end + Modal real (repos: Yormun_Core y Yormun_Executor)
+
+```
+Vas a cerrar la ejecución aislada: declarar la tool `runCode`, conectar Yormun_Core con el Executor por HTTP interno, e implementar el cliente real de Modal (hoy `ModalNotImplementedError`). Ambos repos son tuyos (`registry.ts` en Core, Yormun_Executor completo).
+
+ANTES DE ESCRIBIR CÓDIGO:
+1. Lee `../Yormun_Docs/docs/BLUEPRINT.md` sección 4 completa (orquestación y ejecución aislada, especialmente 4.2-4.5).
+2. Lee `../Yormun_Docs/AGENTS.md` 5.3 (separación de privilegios) y 5.5 (whitelist de egresos).
+3. Lee `../Yormun_Docs/docs/adr/0003-*.md` y el código real de `Yormun_Executor/src/execute/` y `src/modal/`.
+4. Revisa `../Yormun_Docs/STATUS.md`.
+
+TU TAREA:
+- `registry.ts`: declarar `runCode` con `hitlLevel: 'confirm'` (BLUEPRINT Fase 5 lo fija explícitamente) y `timeoutBehavior` justificado.
+- Yormun_Core: `src/integrations/executor/` NO — va en área tuya: cliente HTTP del Executor (`EXECUTOR_BASE_URL` requerida en env.schema, fail-fast) + registro del executor de `runCode` en `ToolExecutorRegistry` y en el registro de invocación del agent loop (5.1). El código de core JAMÁS importa clientes de Kubernetes (regla de oro #1).
+- Yormun_Executor: implementar `ModalService` real (SDK/API de Modal, token vía env desde Infisical, requerido fail-fast) para `remote: true` — target: código Python con dependencias (pandas). Decidir y documentar el criterio local-Deno vs Modal (lenguaje/deps/recursos).
+- Tests: unit con Modal mockeado (API externa) + integración existente de pods Deno intacta. En core, tests del cliente HTTP mockeando el Executor.
+
+CRITERIOS DE ÉXITO:
+- Criterio del BLUEPRINT: "analiza este CSV con pandas" → pending approval → al aprobar, el Executor lo manda a Modal y el resultado vuelve al chat.
+- Un `runCode` con código Deno simple corre en pod local con NetworkPolicy de egreso aplicada.
+- CI verde en AMBOS repos (recuerda actualizar los `env:` de los workflows con las variables nuevas — ya nos pasó dos veces).
+- Actualiza `../Yormun_Docs/STATUS.md`.
+
+RESTRICCIONES:
+- El resultado de ejecución es contenido no confiable: se envuelve con el sanitizer antes de entrar a cualquier prompt.
+- Límites de recursos y timeout duros en ambas rutas (local y Modal).
+
+USA CLAUDE OPUS 4.8 (frontera de seguridad + diseño cross-repo).
+
+ANTES DE IMPLEMENTAR: Propón el plan. Espera aprobación.
+```
+
+### 5.3 [ANTIGRAVITY] — Sesiones reales en Telegram: agent loop + memoria (repo: Yormun_Core)
+
+```
+Vas a conectar dos piezas ya construidas al bot de Telegram (tu área, `src/telegram/**`): el agent loop (Fase 5.1) y la memoria extendida (`src/memory/`, Fase 4.3). Hoy el texto libre responde sin tools y sin memoria.
+
+ANTES DE ESCRIBIR CÓDIGO:
+1. Lee `../Yormun_Docs/docs/BLUEPRINT.md` secciones 3.3.1 y 6.4.
+2. Lee `../Yormun_Docs/STATUS.md` — sección "Fase 4.3 resumen técnico" (handoff de memoria) y lo que Claude Code haya documentado del contrato del agent loop (5.1).
+3. Lee las firmas reales: `src/agent/` (AgentService), `src/memory/memory.service.ts` (recall/consolidate). NO modifiques nada dentro de esas carpetas.
+
+TU TAREA:
+- Registrar los handlers de tus integraciones (Canvas, Google Calendar, Gmail — los `auto`/`notify`) en el registro de invocación del agent loop, en el `onModuleInit()` de cada módulo (mismo patrón que ya usaste con `ToolExecutorRegistry` para `sendEmail`/`deleteCalendarEventFuture`).
+- El handler de texto libre pasa a llamar `AgentService` en vez de `budgetGuardedRouter.complete()` directo.
+- Ciclo de sesión: al primer mensaje tras X minutos de inactividad se abre sesión nueva (uuid) e inyecta `recall(mensaje, k)` al contexto; al cerrarse (inactividad vía cron y/o comando `/endsession` — propón y justifica) se llama `consolidate(sessionId, transcript)`. Definir qué es el "transcript" (buffer en memoria de la sesión) y su límite de tamaño.
+- Comando `/memory <query>` para que el owner consulte la memoria a mano.
+- Tests actualizados en `telegram-bot.service.spec.ts` + tests del ciclo de sesión.
+
+CRITERIOS DE ÉXITO:
+- Flujo real: "mándale un correo a X" por Telegram → pending approval con payload → `/approve` → correo enviado (mecanismo PR #8, ya existente).
+- Una preferencia dicha en una sesión aparece en el contexto de la siguiente (test con LLM y embeddings mockeados).
+- CI verde, verificado con `gh pr checks` (no solo local).
+- Actualiza `../Yormun_Docs/STATUS.md`.
+
+RESTRICCIONES:
+- NO toques `src/agent/**`, `src/memory/**`, `src/hitl/**` — si el contrato no te alcanza, pide el cambio vía STATUS.md.
+- El contenido de mensajes entrantes sigue las reglas de sanitización de siempre.
+
+ANTES DE IMPLEMENTAR: Propón el plan, incluyendo tu decisión de cierre de sesión. Espera aprobación.
+```
+
+---
+
+## Fase 6 — API pública e interfaces
+
+### 6.1 [CLAUDE CODE] — Auth + API REST/WebSocket para interfaces (repo: Yormun_Core)
+
+```
+Vas a construir la puerta de entrada para el dashboard y la CLI: auth single-user con JWT y la API REST + WebSocket que exponen lo que hoy solo se ve por Telegram. Es la frontera de seguridad del sistema completo — la lidera Claude Code.
+
+ANTES DE ESCRIBIR CÓDIGO:
+1. Lee `../Yormun_Docs/docs/BLUEPRINT.md` secciones 4.1 (auth), 4.6 (contratos OpenAPI), 5 (dominios) y 9.7 (rate limiting).
+2. Lee `../Yormun_Docs/AGENTS.md` secciones 4.5 (contratos entre repos) y 5 completa.
+3. Revisa `src/generate-contract.ts` y `contracts/openapi.json` actuales.
+
+TU TAREA:
+- `src/auth/`: login single-user (password del owner verificada contra hash en env/Infisical, nunca en claro), emisión de JWT firmado (llave vía Infisical), guard global de NestJS — TODO endpoint protegido por defecto, allowlist explícita para login/webhook de Telegram/metrics/health.
+- Endpoints REST (los datos ya existen, solo se exponen): aprobaciones pendientes + aprobar/rechazar (vía `ApprovalExecutionService` — mismo camino que Telegram, sin duplicar lógica), audit log paginado, estado de budget/kill switch (+ unpause), memoria (`recall`), y chat contra `AgentService`.
+- WebSocket gateway para eventos en vivo: nueva pending approval, alerta de budget, respuesta de chat en streaming si el modelo lo permite.
+- Rate limiting en la API pública (BLUEPRINT 9.7).
+- Regenerar `contracts/openapi.json` — Web y CLI consumirán tipos generados, jamás copiados a mano (regla de oro #11).
+- Tests: guards (sin token → 401, token inválido → 401), cada endpoint con servicios mockeados, e2e de login→acción protegida.
+
+CRITERIOS DE ÉXITO:
+- `curl` sin token a cualquier endpoint de datos → 401. Con token → funciona.
+- Aprobar desde la API ejecuta la tool igual que `/approve` en Telegram (mismo servicio, test que lo pruebe).
+- Contrato OpenAPI regenerado y commiteado; CI verde en real.
+- Actualiza `../Yormun_Docs/STATUS.md` documentando la API para Antigravity (6.2-6.4).
+
+RESTRICCIONES:
+- Single-user real: sin registro, sin roles, sin multi-tenancy (decisión del owner 2026-07-23).
+- Ningún secreto nuevo opcional en env.schema — todo requerido fail-fast, y actualiza el CI workflow en el mismo PR.
+
+USA CLAUDE OPUS 4.8 (auth es auditoría de seguridad por definición).
+
+ANTES DE IMPLEMENTAR: Propón el plan. Espera aprobación.
+```
+
+### 6.2 [ANTIGRAVITY] — Web Dashboard MVP (repo: Yormun_Web)
+
+```
+Vas a construir el dashboard real de YORMUNGANDER — hoy el repo es el template de Vite sin tocar. Repo tuyo.
+
+ANTES DE ESCRIBIR CÓDIGO:
+1. Lee `../Yormun_Docs/docs/BLUEPRINT.md` secciones 5 (dominios: el dash vive en `dash.yormun.com`) y 8 (interfaces).
+2. Lee `../Yormun_Docs/AGENTS.md` — énfasis en 4.5 (contratos) y las reglas de oro #8, #10, #11.
+3. Lee la API real recién construida (6.1): `Yormun_Core/contracts/openapi.json` y la nota de Claude Code en `STATUS.md`.
+
+TU TAREA (MVP — Monaco y applets van en 6.3, NO acá):
+- Setup real: router, `pnpm generate:api` consumiendo el contrato de core (tipos generados, cero tipos copiados), cliente HTTP con el JWT, pantalla de login.
+- **Bandeja HITL**: lista viva de pending approvals (WebSocket), y cada card muestra tool, plan summary, payload legible y la lista de inputs externos que influyeron (regla de oro #8 — no es opcional). Botones aprobar/rechazar; dual-confirm muestra el temporizador de 30s.
+- **Chat** con el agente (streaming si la API lo da).
+- **Audit log** paginado con filtros; **panel de budget** (consumo diario, kill switch + unpause).
+- Tests de componentes para la card HITL y el flujo de login.
+
+CRITERIOS DE ÉXITO:
+- Flujo completo contra core corriendo local: login → chat pide enviar un correo → la card aparece en vivo → aprobar → el resultado llega al chat.
+- Cero `any`, cero tipos duplicados del backend.
+- CI verde en real (`gh pr checks`).
+- Actualiza `../Yormun_Docs/STATUS.md`.
+
+RESTRICCIONES:
+- No introduzcas librerías de estado/UI pesadas sin proponerlas antes en el plan.
+- El JWT no se guarda en localStorage sin justificar la decisión frente a alternativas en el plan.
+
+ANTES DE IMPLEMENTAR: Propón el plan (estructura de rutas, manejo de estado, librerías). Espera aprobación.
+```
+
+### 6.3 [ANTIGRAVITY] — Editor Monaco + applets (repo: Yormun_Web)
+
+```
+Segunda mitad del dashboard (requiere 6.2 mergeado): edición de código con comentarios de la IA y applets generados por agentes.
+
+ANTES DE ESCRIBIR CÓDIGO:
+1. Lee `../Yormun_Docs/docs/BLUEPRINT.md` sección 8 (Zone Widgets, applets) y 5.2 (separación de dominios).
+2. Regla de oro #10: contenido generado por agentes se sirve SOLO desde `yormungander.com`.
+
+TU TAREA:
+- Monaco embebido con Zone Widgets: comentarios inline de la IA línea por línea (pedidos vía la API de chat/agente), aceptar/descartar sugerencia por widget.
+- Vista de applets: iframes sandboxeados (`sandbox` estricto + CSP) apuntando únicamente a `yormungander.com`.
+- Tests de los componentes nuevos.
+
+CRITERIOS DE ÉXITO:
+- Criterio del BLUEPRINT Fase 6: editar código en el dashboard, la IA comenta línea por línea, y se aprueban cambios desde ahí.
+- Ningún iframe puede apuntar a un origen fuera de `yormungander.com` (test que lo pruebe).
+- CI verde en real. Actualiza `../Yormun_Docs/STATUS.md`.
+
+ANTES DE IMPLEMENTAR: Propón el plan. Espera aprobación.
+```
+
+### 6.4 [ANTIGRAVITY] — CLI con Ink (repo: Yormun_CLI)
+
+```
+Vas a construir la CLI real — hoy es el template de Ink sin tocar. Repo tuyo. Requiere 6.1 mergeado.
+
+ANTES DE ESCRIBIR CÓDIGO:
+1. Lee `../Yormun_Docs/docs/BLUEPRINT.md` sección 8 (interfaces) y `AGENTS.md` 4.5.
+2. Consume el contrato OpenAPI de core (tipos generados, igual que Web).
+
+TU TAREA:
+- `yormun login` (guarda el token de forma segura en el keychain del OS o archivo con permisos 600 — justifica), `yormun status` (budget, kill switch, salud), `yormun tasks` (pending approvals) + `yormun approve/reject <id>`, `yormun chat` (sesión interactiva con el agente), `yormun memory <query>`.
+- Tests con la API mockeada.
+
+CRITERIOS DE ÉXITO:
+- `yormun tasks` + `yormun approve` completan el mismo flujo HITL que Telegram y el dashboard.
+- CI verde en real. Actualiza `../Yormun_Docs/STATUS.md`.
+
+RESTRICCIONES:
+- Cero tipos copiados a mano del backend (regla de oro #11).
+
+ANTES DE IMPLEMENTAR: Propón el plan. Espera aprobación.
+```
+
+---
+
+## Fase 7 — Deploy real, activación y hardening
+
+### 7.1 [ANTIGRAVITY] — Deploy de las apps + GitOps (repos: Yormun_Infra + Dockerfiles en cada repo)
+
+```
+La infra base existe (Fase 1) pero NINGUNA app tiene manifest de deploy — core, executor y web nunca se han desplegado. Vas a cerrar ese hueco. Yormun_Infra es tuyo; los Dockerfiles se agregan en cada repo de app (coordina en STATUS.md los de Yormun_Core/Executor, que comparten ownership de CI con Claude Code).
+
+ANTES DE ESCRIBIR CÓDIGO:
+1. Lee `../Yormun_Docs/docs/BLUEPRINT.md` secciones 4.4 (resources obligatorios), 5 (dominios/Traefik) y 12 completa (deployment, GitOps con Flux, CI/CD).
+2. Lee los manifests existentes en `Yormun_Infra/k8s/base/` para seguir el estilo (probes, resources, kustomize).
+
+TU TAREA:
+- Dockerfiles multi-stage pinneados para Yormun_Core, Yormun_Executor y Yormun_Web (build estático servido por nginx/caddy), publicados a GHCR desde el CI de cada repo.
+- Manifests: Deployment de core (1 réplica, rolling con surge, PVC para `memory.db` montado en `MEMORY_DB_PATH`, secrets vía Infisical), Deployment del executor (ServiceAccount `executor` ya existente), Deployment de web, IngressRoutes de Traefik (`api.yormun.com`, `dash.yormun.com`, `yormungander.com` para applets).
+- Flux bootstrap: GitOps sobre `Yormun_Infra` (BLUEPRINT 12.1) — un push a main reconcilia el clúster.
+- NetworkPolicies coherentes con las existentes.
+
+CRITERIOS DE ÉXITO:
+- `kubectl apply --dry-run=server` limpio en todo; `kubectl kustomize` sin errores.
+- CI de cada repo publica imagen taggeada por SHA; Flux la despliega al actualizar el manifest.
+- Ningún secreto en YAML; resources y probes en todo Deployment (AGENTS 4.4).
+- Actualiza `../Yormun_Docs/STATUS.md`.
+
+RESTRICCIONES:
+- Prohibido `latest`. Prohibido `hostNetwork`. El executor mantiene su RBAC actual sin ampliaciones.
+
+ANTES DE IMPLEMENTAR: Propón el plan. Espera aprobación.
+```
+
+### 7.2 [CLAUDE CODE] — Runbook de activación real (repo: Yormun_Infra, docs + scripts de apoyo)
+
+```
+Todo lo construido corre con credenciales falsas en CI. Vas a escribir el runbook + scripts de apoyo para la puesta en marcha REAL — los pasos manuales los ejecuta el owner, tu trabajo es que sean imposibles de hacer mal.
+
+ANTES DE ESCRIBIR CÓDIGO:
+1. Lee `../Yormun_Docs/docs/BLUEPRINT.md` secciones 7 (integraciones) y 11 (secretos).
+2. Revisa TODAS las env vars requeridas reales: `Yormun_Core/src/config/env.schema.ts` y el equivalente del Executor.
+
+TU TAREA:
+- `docs/runbooks/activation.md` en Yormun_Infra: checklist ordenado y verificable — bootstrap de la VM OCI (si no está hecho), carga de secretos reales en Infisical (lista exacta de claves), obtención del `GOOGLE_REFRESH_TOKEN` vía consent flow (con un script helper `scripts/google-oauth-bootstrap.ts` que imprime la URL de consentimiento y captura el token), alta del webhook real de Telegram, verificación de backups reales subiendo a R2, y smoke test E2E final.
+- El smoke test E2E como checklist ejecutable: mensaje por Telegram → tool auto → correo con confirm → aprobar → verificar audit log y presupuesto → `/google-oauth-refreshed` → verificar dashboard y CLI con el mismo flujo.
+- Runbook "VM perdida → reconstrucción desde IaC + backups" (criterio del BLUEPRINT Fase 7).
+
+CRITERIOS DE ÉXITO:
+- El owner puede activar el sistema completo siguiendo el runbook sin preguntar nada.
+- Cada paso tiene su verificación ("cómo sé que funcionó").
+- Actualiza `../Yormun_Docs/STATUS.md`.
+
+ANTES DE IMPLEMENTAR: Propón el plan. Espera aprobación.
+```
+
+### 7.3 [CLAUDE CODE] — Hardening final: chaos, auditoría, MCP (repos: varios)
+
+```
+Cierre del roadmap: el sistema debe aguantar 7 días autónomo sin intervención salvo aprobaciones HITL (criterio del BLUEPRINT Fase 7).
+
+ANTES DE ESCRIBIR CÓDIGO:
+1. Lee `../Yormun_Docs/docs/BLUEPRINT.md` secciones 6.4 (MCP servers), 13 (testing) y 15 (reglas de oro).
+2. Lee `../Yormun_Docs/AGENTS.md` sección 5 completa — es tu checklist de auditoría.
+
+TU TAREA:
+- **Auditoría de seguridad completa**: verificar cada regla de oro (#1-#12) contra el código real con evidencia (test o referencia), intentos activos de prompt injection contra el agent loop (payloads en correos/eventos de Canvas que intenten escapar del sanitizer o escalar HITL), revisión de RBAC/NetworkPolicies. Entregable: informe en `Yormun_Docs/docs/security-audit-fase7.md` con hallazgos y fixes.
+- **Chaos tests** (Yormun_Infra `scripts/chaos/`): matar el pod de core a mitad de un dual-confirm (el estado sobrevive — está en Postgres), tirar Postgres y verificar fail-ruidoso sin corrupción del hash chain, simular runaway real y verificar kill switch + alerta.
+- **MCP servers** para docs externas (Context7 u oficiales) en la config del agente — sin pipeline propio de scraping.
+- Runbooks de operación pendientes.
+
+CRITERIOS DE ÉXITO:
+- Informe de auditoría sin hallazgos críticos abiertos.
+- Los 3 chaos tests pasan y quedan documentados.
+- Criterio final del BLUEPRINT: 7 días autónomo (se valida en operación real post-activación).
+- Actualiza `../Yormun_Docs/STATUS.md`.
+
+USA CLAUDE OPUS 4.8 (auditoría de seguridad).
+
+ANTES DE IMPLEMENTAR: Propón el plan. Espera aprobación.
+```
 
 ---
 
