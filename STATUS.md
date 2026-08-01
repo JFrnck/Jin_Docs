@@ -1,6 +1,6 @@
 # STATUS
 
-## Última actualización: 2026-08-01 (America/Lima) — actualización 12
+## Última actualización: 2026-08-01 (America/Lima) — actualización 13
 
 > **Antigravity ya está activo** (ver abajo, Fase 3.1/2.4/4.2). Retoma ownership normal de `docs/WORKFLOW.md` sección 2 — Claude Code ya no asume tareas `[ANTIGRAVITY]` por defecto, salvo negociación puntual vía esta misma nota.
 
@@ -8,10 +8,18 @@
 
 ### Claude Code
 
-- **Repo:** ninguno activo ahora mismo.
-- **Descripción:** Fase 5.4 (orquestación multi-agente) completa — [PR #15](https://github.com/JFrnck/Jin_Core/pull/15), **mergeado**. Ver sección dedicada abajo y ADR 0005.
-- **Próximo:** Fase 5.5 (pods de servicio), arrancando ahora.
-- **⚠️ Coordinación pendiente para PR #14 (Antigravity, Fase 5.3):** PR #15 mergeó primero con la migración `0004_agent_ledger` ya en `main`. PR #14 (`0004_telegram_sessions`) todavía sin mergear tiene el mismo número — Antigravity debe renombrar su migración a `0005_telegram_sessions` (archivo + entrada en `drizzle/meta/_journal.json`) antes de mergear, o el merge va a chocar. Mismo tipo de ajuste que ya documentó el incidente de Jin_Infra #2/#3.
+- **Repo:** Jin_Executor + Jin_Core + Jin_Infra
+- **Rama:** `feature/claude/preview-services` en los 3 repos — [Jin_Executor PR #5](https://github.com/JFrnck/Jin_Executor/pull/5), [Jin_Core PR #16](https://github.com/JFrnck/Jin_Core/pull/16), [Jin_Infra PR #6](https://github.com/JFrnck/Jin_Infra/pull/6)
+- **Descripción:** Fase 5.5 — Pods de servicio de larga vida (`npm run dev`, etc.) expuestos bajo `https://<slug>.jinserver.com`, con TTL obligatorio y reaper automático. Ver detalle técnico abajo y ADR 0006.
+- **Estado:** 🟡 los 3 PRs abiertos, CI corriendo — actualizar tras `gh pr checks` real en los 3 antes de mergear.
+- **Detalle de implementación:**
+  - **Jin_Executor:** nuevo `src/preview-service/` (`PreviewServiceLifecycleService`, reaper `@Cron`). Origen del código: archivos inline (`files: Record<string,string>`, empaquetados a tar.gz a mano y extraídos por un init container) — decisión confirmada con el owner en esta sesión, ninguna tool existente le da a un agente acceso a git real todavía (mismo gap que `mergeAgentBranch`, ADR 0005 punto 9). Kubernetes es el store de estado (TTL/slug como annotations del pod, sin Postgres nuevo). Primer uso de un CRD de terceros (`IngressRoute` de Traefik) vía `CustomObjectsApi`. `ExecutorToolDefinition` pasa a discriminated union (run-to-completion vs. servicio).
+  - **Jin_Core:** 3 tools nuevas (`startPreviewService` confirm, `stopPreviewService` notify, `listPreviewServices` auto) + `ExecutorClientService` extendido, mismo patrón que `runCode`.
+  - **Jin_Infra:** RBAC del ServiceAccount `executor` gana `services`/`ingressroutes.traefik.io` solo en `agents-sandbox` (sin tocar ResourceQuota/LimitRange), Certificate nuevo para `*.jinserver.com` en `agents-sandbox`, PVC compartido `pnpm-store` (RWO, viable por ser clúster de un solo nodo), script de bootstrap nuevo para `fs.inotify.max_user_watches`.
+  - Tests de integración con K3s real: CRD de `IngressRoute` registrado a mano en el test (`@testcontainers/k3s` corre con `--disable=traefik`), pod+Service responden HTTP verificado desde un probe en `kube-system` (único namespace que la NetworkPolicy de ingreso permite), reaper destruye recursos vencidos.
+  - **Nota de flakiness:** el test de aislamiento de red preexistente de Jin_Executor (`pod-lifecycle.service.integration.spec.ts`, no tocado en este PR) mostró intermitencia bajo carga acumulada de la suite completa de integración — pasa consistentemente en aislamiento. Misma clase de flakiness ya documentada en ADR 0003 (containerd anidado).
+  - **⚠️ Cambio de alcance en Jin_Infra:** el PR #6 toca `k8s/base/executor/**` y `scripts/bootstrap/**`, normalmente área de Antigravity — acotado a una frontera de seguridad (RBAC), mismo precedente que backups en Fase 1.2, explícitamente anticipado por `PROMPTS.md` §5.5.
+- **⚠️ Coordinación pendiente para PR #14 (Antigravity, Fase 5.3):** el PR #15 (Fase 5.4) mergeó primero con la migración `0004_agent_ledger` ya en `main`. PR #14 (`0004_telegram_sessions`) todavía sin mergear tiene el mismo número — Antigravity debe renombrar su migración a `0005_telegram_sessions` (archivo + entrada en `drizzle/meta/_journal.json`) antes de mergear, o el merge va a chocar. Mismo tipo de ajuste que ya documentó el incidente de Jin_Infra #2/#3.
 
 ### Antigravity
 
@@ -179,7 +187,7 @@ Los `"name": "temp-*"` de `package.json` en Web y CLI ya no aplican como pendien
 12. **Fase 5.2** [Claude Code] — ✅ hecho, [Jin_Executor PR #3](https://github.com/JFrnck/Jin_Executor/pull/3) + [Jin_Core PR #12](https://github.com/JFrnck/Jin_Core/pull/12) (`runCode` end-to-end + Modal real). Ver sección dedicada abajo.
 13. **Fase 5.3** [Antigravity] — Sesiones reales en Telegram: agent loop + memoria (`src/telegram/**`). Desbloqueado, sin arrancar.
 14. **Fase 5.4** [Claude Code] — ✅ hecho, [PR #15](https://github.com/JFrnck/Jin_Core/pull/15) Jin_Core (orquestación multi-agente: sub-agentes coordinados vía task ledger estilo Jira persistido en Postgres). ADR 0005. Ver sección dedicada arriba.
-15. **Fase 5.5** [Claude Code] — Pods de servicio: preview apps con puertos expuestos (`npm run dev`, backends) bajo `*.jinserver.com` con TTL (Jin_Executor + Core + Infra, requiere ADR). **Desbloqueado ahora que 5.2 está hecho**, sin arrancar.
+15. **Fase 5.5** [Claude Code] — 🟡 en progreso, [Jin_Executor PR #5](https://github.com/JFrnck/Jin_Executor/pull/5) + [Jin_Core PR #16](https://github.com/JFrnck/Jin_Core/pull/16) + [Jin_Infra PR #6](https://github.com/JFrnck/Jin_Infra/pull/6), CI corriendo (pods de servicio: preview apps con puertos expuestos bajo `*.jinserver.com`, TTL obligatorio). ADR 0006. Ver sección dedicada arriba.
 16. **Fase 6.1** [Claude Code] — Auth JWT single-user + API REST/WebSocket para interfaces (Jin_Core).
 17. **Fase 6.2** [Antigravity] — Web Dashboard MVP (Jin_Web — hoy es el template sin tocar).
 18. **Fase 6.3** [Antigravity] — Monaco + Zone Widgets + applets (Jin_Web).
