@@ -1,6 +1,6 @@
 # STATUS
 
-## Última actualización: 2026-08-01 (America/Lima) — actualización 14
+## Última actualización: 2026-08-01 (America/Lima) — actualización 15
 
 > **Antigravity ya está activo** (ver abajo, Fase 3.1/2.4/4.2). Retoma ownership normal de `docs/WORKFLOW.md` sección 2 — Claude Code ya no asume tareas `[ANTIGRAVITY]` por defecto, salvo negociación puntual vía esta misma nota.
 
@@ -9,27 +9,21 @@
 ### Claude Code
 
 - **Repo:** ninguno activo ahora mismo.
-- **Descripción:** Fase 5.5 (pods de servicio) completa — [Jin_Executor PR #5](https://github.com/JFrnck/Jin_Executor/pull/5), [Jin_Core PR #16](https://github.com/JFrnck/Jin_Core/pull/16), [Jin_Infra PR #6](https://github.com/JFrnck/Jin_Infra/pull/6), **los 3 mergeados**. Ver sección dedicada abajo y ADR 0006.
+- **Descripción:** Fase 5.5 (pods de servicio) completa — [Jin_Executor PR #5](https://github.com/JFrnck/Jin_Executor/pull/5), [Jin_Core PR #16](https://github.com/JFrnck/Jin_Core/pull/16), [Jin_Infra PR #6](https://github.com/JFrnck/Jin_Infra/pull/6), **los 3 mergeados**. Ver sección dedicada abajo y ADR 0006. Además, revisó y mergeó [PR #14](https://github.com/JFrnck/Jin_Core/pull/14) (Antigravity, Fase 5.3) — ver detalle abajo en la sección de Antigravity.
 - **Próximo:** ninguno activo — Fase 6.1 (auth + API REST/WebSocket) desbloqueada tras 5.4/5.5.
-- **⚠️ Coordinación pendiente para PR #14 (Antigravity, Fase 5.3):** el PR #15 (Fase 5.4) mergeó primero con la migración `0004_agent_ledger` ya en `main`. PR #14 (`0004_telegram_sessions`) todavía sin mergear tiene el mismo número — Antigravity debe renombrar su migración a `0005_telegram_sessions` (archivo + entrada en `drizzle/meta/_journal.json`) antes de mergear, o el merge va a chocar. Mismo tipo de ajuste que ya documentó el incidente de Jin_Infra #2/#3.
 
 ### Antigravity
 
-- **Repo:** Jin_Core
-- **Rama:** `feature/antigravity/telegram-sessions` — [PR #14](https://github.com/JFrnck/Jin_Core/pull/14) (Commits `ecbe045a` & `1775583f`)
-- **Descripción:** Fase 5.3 — Sesiones reales en Telegram (agent loop + memoria extendida + registro de 8 executors a nivel client + reconstrucción de historial multi-turno y persistencia DB de sesión).
-- **Estado:** 🟢 PR #14 abierto y CI completamente verde (`build` & `GitGuardian` ambos en `pass`). 265/265 pruebas unitarias pasadas.
+- **Repo:** ninguno activo ahora mismo.
+- **Descripción:** Fase 5.3 (sesiones reales en Telegram) completa — [PR #14](https://github.com/JFrnck/Jin_Core/pull/14), **mergeado**.
 - **Detalle de implementación:**
-  - Registro de los 8 ejecutores de herramientas faltantes a nivel `ClientService` en `ToolExecutorRegistry` (Google Gmail/Calendar y Canvas) para evitar doble log de auditoría y doble sanitizado.
-  - Tabla Postgres `telegram_sessions` + migración `0004_telegram_sessions` registrada en `_journal.json`.
+  - Registro de los 8 ejecutores de herramientas faltantes a nivel `ClientService` en `ToolExecutorRegistry` (Google Gmail/Calendar y Canvas) para evitar doble log de auditoría y doble sanitizado — verificado por Claude Code al revisar: correcto, y ya era el patrón establecido desde Fase 4.2 (`sendEmail`/`deleteCalendarEventFuture`), no deuda nueva.
+  - Tabla Postgres `telegram_sessions` + migración, **renumerada de `0004_telegram_sessions` a `0005_telegram_sessions`** al mergear (`0004` ya lo había tomado `agent_ledger` de la Fase 5.4, mergeada primero) — mismo tipo de ajuste que el incidente de Jin_Infra #2/#3.
   - Integración del Agent Loop (`AgentService.runTurn()`) y Memoria Extendida (`MemoryService`) en Telegram. Reconstrucción incremental del transcript por turno en Postgres.
   - Ventana deslizante (últimos 20 mensajes + memorias sintéticas si se recuperan) para la llamada al modelo, pero consolidación con el **transcript COMPLETO** en Postgres al cerrar la sesión (`/endsession` o cron `@Cron('*/5 * * * *') checkSessionInactivity()`).
   - Comando `/memory <query>` para consultar memorias a largo plazo en Telegram.
-  - Restauradas las pruebas unitarias de idempotencia de `/unpause` y propagación de `KillSwitchActiveError` en el Agent Loop (**28 pruebas pasadas en `telegram-bot.service.spec.ts`, 265 pasadas en total**).
-
-
-
-
+  - 28 pruebas en `telegram-bot.service.spec.ts`, cobertura genuina (verificada, no superficial) de ventana deslizante vs. consolidación completa, inyección de memoria en sesión nueva, idempotencia de `/unpause`, propagación de errores del agent loop.
+- **Revisión de Claude Code antes de mergear** (checkout real de la rama + merge contra `main` actual, no solo el self-report): encontró y corrigió la colisión de migración de arriba, un merge conflict real en `schema.ts` (tablas de Fase 5.4 vs. `telegramSessions`), y un `session = created!;` reemplazado por chequeo explícito (mismo patrón que `audit.service.ts`, AGENTS.md 3.2). Verificado tras el fix: `tsc`/`lint`/298 tests unitarios/59 de integración (Postgres real)/smoke test de `AppModule` completo con env vars fake — todos verdes, `gh pr checks` real confirmado antes de mergear.
 
 
 
@@ -123,6 +117,7 @@ Lo que el plan sí acierta: los 3 niveles HITL coinciden con blueprint/PROMPTS, 
 | Jin_Core | [#11](https://github.com/JFrnck/Jin_Core/pull/11) | Fase 5.1: agent loop con tool-calling, plan-and-solve y self-correction | ✅ mergeado |
 | Jin_Executor | [#3](https://github.com/JFrnck/Jin_Executor/pull/3) | Fase 5.2: `ModalService` real (sandbox Python/pandas) + ruteo local/remoto por `language` | ✅ mergeado |
 | Jin_Core | [#12](https://github.com/JFrnck/Jin_Core/pull/12) | Fase 5.2: tool `runCode` en registry + `src/executor-client/` (cierra el loop con el Executor) | ✅ mergeado |
+| Jin_Core | [#14](https://github.com/JFrnck/Jin_Core/pull/14) | Fase 5.3: sesiones reales en Telegram (agent loop + memoria + 8 executors client-level) | ✅ mergeado |
 | Jin_Core | [#15](https://github.com/JFrnck/Jin_Core/pull/15) | Fase 5.4: orquestación multi-agente (task ledger persistido, `OrchestratorService`) | ✅ mergeado |
 | Jin_Executor | [#5](https://github.com/JFrnck/Jin_Executor/pull/5) | Fase 5.5: `PreviewServiceLifecycleService`, pods de servicio bajo `*.jinserver.com` | ✅ mergeado |
 | Jin_Core | [#16](https://github.com/JFrnck/Jin_Core/pull/16) | Fase 5.5: tools `startPreviewService`/`stopPreviewService`/`listPreviewServices` | ✅ mergeado |
@@ -180,7 +175,7 @@ Los `"name": "temp-*"` de `package.json` en Web y CLI ya no aplican como pendien
 
 11. **Fase 5.1** [Claude Code] — ✅ hecho, PR #11 Jin_Core (Agent loop con tool-calling + plan-and-solve + self-correction). Ver sección dedicada abajo. **Era el prerequisito de todo lo demás** — ya desbloqueado.
 12. **Fase 5.2** [Claude Code] — ✅ hecho, [Jin_Executor PR #3](https://github.com/JFrnck/Jin_Executor/pull/3) + [Jin_Core PR #12](https://github.com/JFrnck/Jin_Core/pull/12) (`runCode` end-to-end + Modal real). Ver sección dedicada abajo.
-13. **Fase 5.3** [Antigravity] — Sesiones reales en Telegram: agent loop + memoria (`src/telegram/**`). Desbloqueado, sin arrancar.
+13. **Fase 5.3** [Antigravity] — ✅ hecho, [PR #14](https://github.com/JFrnck/Jin_Core/pull/14) Jin_Core (sesiones reales en Telegram: agent loop + memoria). Ver sección dedicada arriba.
 14. **Fase 5.4** [Claude Code] — ✅ hecho, [PR #15](https://github.com/JFrnck/Jin_Core/pull/15) Jin_Core (orquestación multi-agente: sub-agentes coordinados vía task ledger estilo Jira persistido en Postgres). ADR 0005. Ver sección dedicada arriba.
 15. **Fase 5.5** [Claude Code] — ✅ hecho, [Jin_Executor PR #5](https://github.com/JFrnck/Jin_Executor/pull/5) + [Jin_Core PR #16](https://github.com/JFrnck/Jin_Core/pull/16) + [Jin_Infra PR #6](https://github.com/JFrnck/Jin_Infra/pull/6) (pods de servicio: preview apps con puertos expuestos bajo `*.jinserver.com`, TTL obligatorio). ADR 0006. Ver sección dedicada arriba.
 16. **Fase 6.1** [Claude Code] — Auth JWT single-user + API REST/WebSocket para interfaces (Jin_Core).
@@ -365,6 +360,7 @@ También corregido de paso: glob patterns rotos en `lint`/`format`, y `package.j
 
 ## Recientemente completado (últimos 7 días)
 
+- 2026-08-01: [Jin_Core] [PR #14](https://github.com/JFrnck/Jin_Core/pull/14) mergeado (Antigravity) — Fase 5.3 completa: sesiones reales de Telegram con Agent Loop + Memoria Extendida, persistencia Postgres del transcript, ventana deslizante (20 mensajes) para el modelo vs. consolidación con transcript completo al cerrar sesión, comando `/memory`. **Revisado y mergeado por Claude Code**: checkout real de la rama, merge contra `main` actual (Fases 5.4/5.5 ya mergeadas), encontró y corrigió una colisión real de migración (`0004_telegram_sessions` → `0005_telegram_sessions`, `0004` ya tomado por `agent_ledger`), un merge conflict real en `schema.ts`, y un estilo menor (`created!` → chequeo explícito). Verificado tras el fix con `tsc`/`lint`/298 unitarios/59 integración (Postgres real)/smoke test de `AppModule` completo — `gh pr checks` real confirmado antes de mergear, no solo local.
 - 2026-08-01: [Jin_Executor] [PR #5](https://github.com/JFrnck/Jin_Executor/pull/5) + [Jin_Core] [PR #16](https://github.com/JFrnck/Jin_Core/pull/16) + [Jin_Infra] [PR #6](https://github.com/JFrnck/Jin_Infra/pull/6) mergeados — Fase 5.5 completa: pods de servicio de larga vida (`npm run dev`, etc.) expuestos bajo `https://<slug>.jinserver.com` con TTL obligatorio y reaper automático. Código servido vía archivos inline (tar.gz armado a mano, sin dependencia nueva) — decisión confirmada con el owner en esta sesión, ninguna tool le da hoy a un agente acceso a git real. Primer uso de un CRD de terceros (`IngressRoute` de Traefik) en el repo. RBAC extendido en Jin_Infra (cambio acotado en área normalmente de Antigravity, mismo precedente que backups Fase 1.2). ADR 0006 escrito. CI verificado con `gh pr checks` real en los 3 repos — dos flakiness intermitentes de CI encontradas y resueltas (retry de DNS en el test nuevo; re-run de un test de aislamiento preexistente de Fase 2.3, sin tocarlo). Ver sección dedicada arriba.
 - 2026-08-01: [Jin_Core] [PR #15](https://github.com/JFrnck/Jin_Core/pull/15) mergeado — Fase 5.4 completa: orquestación multi-agente (`OrchestratorService`, task ledger persistido en Postgres, escalera de decisión bajo-riesgo/material vía HITL existente, kill switch corta todo el run, presupuesto agregado vía `BudgetService.getSessionUsage()` nuevo). ADR 0005 escrito. 284 unitarios + 59 integración (Postgres real) en verde, CI verificado con `gh pr checks` real. Bug de wiring (`AGENT_CONFIG` no exportado) encontrado y corregido en un smoke test de `AppModule` completo antes de abrir el PR. Ver sección dedicada arriba. **Pendiente:** PR #14 (Antigravity, Fase 5.3) debe renumerar su migración `0004_telegram_sessions` a `0005_*` antes de mergear (colisión de numeración, ver nota en "En progreso").
 - 2026-07-31: **Rename global Yormun/Yormungander → Jin, completo en los 6 repos.** PRs mergeados con CI verde: [Core #13](https://github.com/JFrnck/Jin_Core/pull/13), [Executor #4](https://github.com/JFrnck/Jin_Executor/pull/4), [Infra #5](https://github.com/JFrnck/Jin_Infra/pull/5), [Web #2](https://github.com/JFrnck/Jin_Web/pull/2), [CLI #2](https://github.com/JFrnck/Jin_CLI/pull/2), más el commit de docs `56b3eb5`. Incluye paquetes (`jin-core`, `jin-executor`, y de paso `jin-web`/`jin-cli`, saldando la deuda de `temp-*` pendiente desde la Fase 2.1), clase base de errores `JinError` (+ `JinErrorFilter`), namespaces de K8s (`jin`, `jin-executor`), imagen de Modal `jin-data-science`, bucket R2 `jin-backups`, lock advisory de la audit chain, y el remapeo de dominios a `jin.jeanfranck.com` + `jinserver.com`. Los 6 repos renombrados en GitHub (`Jin_*`) y las carpetas locales bajo `Jin/`; GitHub redirige las URLs viejas con 301, así que los links a PRs anteriores de este archivo siguen funcionando (verificado con `curl`). **Verificación del aislamiento**, que era el riesgo real del cambio de namespaces: `kubectl kustomize` renderiza los 60 recursos, los 4 namespaces se declaran, las 12 NetworkPolicies apuntan a namespaces existentes y los `namespaceSelector` resuelven — más el test de integración contra K3s real, que sigue probando que un pod en `agents-sandbox` no alcanza un servicio en `jin`. Un rename a medias ahí habría roto el aislamiento en silencio, sin fallar ruidosamente.
