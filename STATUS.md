@@ -1,6 +1,6 @@
 # STATUS
 
-## Última actualización: 2026-07-31 (America/Lima) — actualización 11
+## Última actualización: 2026-08-01 (America/Lima) — actualización 12
 
 > **Antigravity ya está activo** (ver abajo, Fase 3.1/2.4/4.2). Retoma ownership normal de `docs/WORKFLOW.md` sección 2 — Claude Code ya no asume tareas `[ANTIGRAVITY]` por defecto, salvo negociación puntual vía esta misma nota.
 
@@ -8,17 +8,41 @@
 
 ### Claude Code
 
-- **Repo:** ninguno activo ahora mismo.
-- **Descripción:** Fase 4.1 (Budget guard + kill switch) completa — [PR #6](https://github.com/JFrnck/Jin_Core/pull/6), **mergeado**. Prerequisito "ejecutar al aprobar" completo — [PR #8](https://github.com/JFrnck/Jin_Core/pull/8), **mergeado**. Revisión de 3 rondas + merge de [PR #9](https://github.com/JFrnck/Jin_Core/pull/9) (Fase 4.2, Antigravity). Fase 4.3 (Memoria extendida sqlite-vec) completa — [PR #10](https://github.com/JFrnck/Jin_Core/pull/10), **mergeado**. Roadmap Fase 5-7 planificado y prompts escritos en `docs/PROMPTS.md` (2026-07-25), incluida la Fase 5.4 (multi-agente) agregada a pedido del owner. Fase 5.1 (agent loop) completa — [PR #11](https://github.com/JFrnck/Jin_Core/pull/11), **mergeado**. Fase 5.2 (`runCode` end-to-end + Modal real) completa en ambos repos — [Jin_Executor PR #3](https://github.com/JFrnck/Jin_Executor/pull/3) y [Jin_Core PR #12](https://github.com/JFrnck/Jin_Core/pull/12), **ambos mergeados**. Ver detalle abajo.
-- **Próximo:** ninguno activo — Fase 5.4 (multi-agente) y Fase 5.5 (pods de servicio, ahora desbloqueada tras 5.2) quedan libres para arrancar.
+- **Repo:** Jin_Core
+- **Rama:** `feature/claude/agent-orchestration` — [PR #15](https://github.com/JFrnck/Jin_Core/pull/15)
+- **Descripción:** Fase 5.4 — Orquestación multi-agente: `OrchestratorService` descompone un objetivo en tickets del task ledger (Postgres) y los delega a sub-agentes (instancias adicionales de `AgentService.runTurn()`, Fase 5.1) que corren en paralelo por lotes de dependencias. Ver detalle técnico abajo y ADR 0005.
+- **Estado:** 🟢 PR #15 abierto, mergeable, CI verde (`build` & `GitGuardian` ambos en `pass`, verificado con `gh pr checks` real). 284/284 unitarios + 59/59 integración (Postgres real) pasados.
+- **Detalle de implementación:**
+  - 3 tablas nuevas (`agent_orchestration_runs`, `agent_tickets`, `agent_ticket_comments`) — migración `0004_agent_ledger` (numeración real de `main`; ver nota de coordinación abajo).
+  - Descomposición y reconciliación vía LLM (`reasoning_heavy`, Opus 4.8 por defecto), mismo patrón LLM+Zod que `ConsolidationService` (Fase 4.3).
+  - Conflictos de bajo riesgo entre sub-agentes se resuelven en modo-auto (comentario de resolución registrado); conflictos materiales escalan al owner reusando el HITL/Telegram existente vía tool sintética `resolveAgentConflict` (`confirm`) — sin canal de escalamiento nuevo.
+  - `mergeAgentBranch` declarada como guardrail (PROMPTS.md §5.4) con executor 501 documentado (`AgentBranchMergeNotImplementedError`): hoy ninguna tool le da a un sub-agente la capacidad de producir una branch de código real. Handoff explícito, no silencioso.
+  - Kill switch a mitad de un run corta TODO (chequeo antes de cada lote + `KillSwitchActiveError` real propagada).
+  - Cambios mínimos/retrocompatibles a Fase 5.1: `AgentTurnInput` gana `allowedTools?`/`actorLabel?` opcionales; `BudgetService` gana `getSessionUsage()` público.
+  - Bug real encontrado y corregido durante el smoke test de `AppModule` completo (env vars fake, no solo `tsc`/`test`/`test:integration`): `AGENT_CONFIG` no estaba exportado desde `AgentModule`, `OrchestratorModule` no podía resolverlo — Nest lo hubiera reventado recién al bootstrapear en real. Corregido exportando el token.
+  - ADR 0005 escrito (`docs/adr/0005-multi-agent-orchestration.md`).
+- **Nota de coordinación — numeración de migración:** esta rama parte de `main` (sin el PR #14 de Antigravity, Fase 5.3, todavía sin mergear), así que la migración nueva es `0004_agent_ledger` — el mismo número que `0004_telegram_sessions` de PR #14. Cualquiera de los dos PRs que se mergee segundo debe renombrar su migración a `0005_*` y actualizar `drizzle/meta/_journal.json` antes o al mergear (mismo tipo de coordinación que ya documentó el incidente de Jin_Infra #2/#3).
+- **Próximo:** ninguno activo — Fase 5.5 (pods de servicio) queda libre para arrancar; Fase 6.1 (auth + API) desbloqueada tras 5.4.
 
 ### Antigravity
 
 - **Repo:** Jin_Core
-- **Rama:** `feature/antigravity/google-workspace` — [PR #9](https://github.com/JFrnck/Jin_Core/pull/9), **mergeado a `main`, rama borrada**.
-- **Descripción:** Fase 4.2 completa — Google Calendar + Gmail (`src/integrations/google/`). **Fin de Fase 4.2.**
-- **Estado:** 🟢 Sin tarea activa — **Fase 5.3 (sesiones reales en Telegram + memoria) ya está desbloqueada**, requiere Fase 5.1 (agent loop, mergeado en [PR #11](https://github.com/JFrnck/Jin_Core/pull/11)) — leer el prompt de 5.3 en `docs/PROMPTS.md` antes de arrancar, especialmente el contrato de registro de tools que documenta la sección "Fase 5.1 — resumen técnico" abajo.
-- **Archivos creados/modificados:** `src/integrations/google/` (`GoogleOAuthService` con `getDaysSinceLastRefresh()`, Calendar client/tools, Gmail client/tools con sanitización anti-CRLF en `to`/`subject`), migración `drizzle/0003_google_oauth_state.sql` + `.down.sql`, `GoogleModule` registrando executors en `ToolExecutorRegistry`, comando `/google-oauth-refreshed` + alerta proactiva a Telegram cuando `days >= 6` (con dedupe diario). 193 tests unitarios + 40 de integración en Postgres real + e2e, CI GitHub Actions verde — **verificado independientemente por Claude Code en 3 rondas de revisión** (ver sección de feedback abajo), no solo el self-report.
+- **Rama:** `feature/antigravity/telegram-sessions` — [PR #14](https://github.com/JFrnck/Jin_Core/pull/14) (Commits `ecbe045a` & `1775583f`)
+- **Descripción:** Fase 5.3 — Sesiones reales en Telegram (agent loop + memoria extendida + registro de 8 executors a nivel client + reconstrucción de historial multi-turno y persistencia DB de sesión).
+- **Estado:** 🟢 PR #14 abierto y CI completamente verde (`build` & `GitGuardian` ambos en `pass`). 265/265 pruebas unitarias pasadas.
+- **Detalle de implementación:**
+  - Registro de los 8 ejecutores de herramientas faltantes a nivel `ClientService` en `ToolExecutorRegistry` (Google Gmail/Calendar y Canvas) para evitar doble log de auditoría y doble sanitizado.
+  - Tabla Postgres `telegram_sessions` + migración `0004_telegram_sessions` registrada en `_journal.json`.
+  - Integración del Agent Loop (`AgentService.runTurn()`) y Memoria Extendida (`MemoryService`) en Telegram. Reconstrucción incremental del transcript por turno en Postgres.
+  - Ventana deslizante (últimos 20 mensajes + memorias sintéticas si se recuperan) para la llamada al modelo, pero consolidación con el **transcript COMPLETO** en Postgres al cerrar la sesión (`/endsession` o cron `@Cron('*/5 * * * *') checkSessionInactivity()`).
+  - Comando `/memory <query>` para consultar memorias a largo plazo en Telegram.
+  - Restauradas las pruebas unitarias de idempotencia de `/unpause` y propagación de `KillSwitchActiveError` en el Agent Loop (**28 pruebas pasadas en `telegram-bot.service.spec.ts`, 265 pasadas en total**).
+
+
+
+
+
+
 
 
 ## Feedback Ronda 3 (Telegram) para Antigravity, enviado 2026-07-23
@@ -164,7 +188,7 @@ Los `"name": "temp-*"` de `package.json` en Web y CLI ya no aplican como pendien
 11. **Fase 5.1** [Claude Code] — ✅ hecho, PR #11 Jin_Core (Agent loop con tool-calling + plan-and-solve + self-correction). Ver sección dedicada abajo. **Era el prerequisito de todo lo demás** — ya desbloqueado.
 12. **Fase 5.2** [Claude Code] — ✅ hecho, [Jin_Executor PR #3](https://github.com/JFrnck/Jin_Executor/pull/3) + [Jin_Core PR #12](https://github.com/JFrnck/Jin_Core/pull/12) (`runCode` end-to-end + Modal real). Ver sección dedicada abajo.
 13. **Fase 5.3** [Antigravity] — Sesiones reales en Telegram: agent loop + memoria (`src/telegram/**`). Desbloqueado, sin arrancar.
-14. **Fase 5.4** [Claude Code] — Orquestación multi-agente: sub-agentes coordinados vía task ledger estilo Jira persistido en Postgres (`src/agent/`, requiere ADR nuevo). Desbloqueado, sin arrancar.
+14. **Fase 5.4** [Claude Code] — ✅ hecho, [PR #15](https://github.com/JFrnck/Jin_Core/pull/15) Jin_Core (orquestación multi-agente: sub-agentes coordinados vía task ledger estilo Jira persistido en Postgres). ADR 0005. Ver sección dedicada arriba.
 15. **Fase 5.5** [Claude Code] — Pods de servicio: preview apps con puertos expuestos (`npm run dev`, backends) bajo `*.jinserver.com` con TTL (Jin_Executor + Core + Infra, requiere ADR). **Desbloqueado ahora que 5.2 está hecho**, sin arrancar.
 16. **Fase 6.1** [Claude Code] — Auth JWT single-user + API REST/WebSocket para interfaces (Jin_Core).
 17. **Fase 6.2** [Antigravity] — Web Dashboard MVP (Jin_Web — hoy es el template sin tocar).
