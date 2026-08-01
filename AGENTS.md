@@ -8,14 +8,14 @@
 
 ## 0. Contexto del proyecto
 
-**YORMUNGANDER** (alias **Yormun**) es un sistema operativo personal + orquestador de agentes.
+**Jin** es un sistema operativo personal + orquestador de agentes.
 Usuario único (owner). Self-hosted en Oracle Cloud Free Tier ARM.
 Stack principal: TypeScript, NestJS, K3s, Postgres+pgvector, sqlite-vec, Redis+BullMQ, React+Vite.
-**Estructura: multi-repo** (no monorepo). Todos los repos se clonan juntos bajo la carpeta `Yormun/` (ver sección 4.1).
+**Estructura: multi-repo** (no monorepo). Todos los repos se clonan juntos bajo la carpeta `Jin/` (ver sección 4.1).
 
 Antes de escribir código, lee:
 
-1. `docs/BLUEPRINT.md` — arquitectura y roadmap (repo Yormun_Docs).
+1. `docs/BLUEPRINT.md` — arquitectura y roadmap (repo Jin_Docs).
 2. Este archivo (`AGENTS.md`) — directivas de código.
 3. `docs/WORKFLOW.md` — coordinación entre los dos IDEs.
 4. `docs/MODEL_ROUTING.md` — qué modelo usar para qué tarea.
@@ -58,7 +58,7 @@ Antes de escribir código, lee:
 | TypeScript   | 5.5+                | `strict: true` obligatorio                                   |
 | NestJS       | Última estable      | core y executor                                              |
 | Postgres     | 16                  | Con extensión `vector`                                       |
-| sqlite-vec   | Última estable      | + better-sqlite3. Solo en Yormun_Core (módulo `memory`)      |
+| sqlite-vec   | Última estable      | + better-sqlite3. Solo en Jin_Core (módulo `memory`)      |
 | Redis        | 7                   |                                                              |
 | React        | 19                  | Server Components deshabilitados en este proyecto            |
 | Vite         | Última estable      |                                                              |
@@ -67,7 +67,7 @@ Antes de escribir código, lee:
 | Ink          | Última estable      | Para CLI                                                     |
 | Deno         | 2.x                 | Para pods efímeros                                           |
 
-Cada repo fija su Node en `.nvmrc`; Yormun_Web puede adelantarse si su toolchain lo pide. Nunca asumas que todos los repos comparten versión.
+Cada repo fija su Node en `.nvmrc`; Jin_Web puede adelantarse si su toolchain lo pide. Nunca asumas que todos los repos comparten versión.
 
 ---
 
@@ -121,19 +121,19 @@ Cada repo fija su Node en `.nvmrc`; Yormun_Web puede adelantarse si su toolchain
 Un repositorio por app. **No hay workspaces de pnpm, no hay Turborepo, no hay lockfile compartido.** Cada repo instala, builda, testea y deploya solo. Convención local: todos clonados bajo una misma carpeta para que los IDEs vean el contexto completo:
 
 ```
-Yormun/                # carpeta workspace (NO es un repo git)
-  Yormun_Docs/         # BLUEPRINT, WORKFLOW, PROMPTS, ADRs transversales, STATUS.md
-  Yormun_Core/         # NestJS orquestador
-  Yormun_Executor/     # NestJS ejecución aislada (único que habla con K8s)
-  Yormun_Web/          # React dashboard (deploy: Cloudflare Pages)
-  Yormun_CLI/          # Ink CLI
-  Yormun_Infra/        # Kustomize, Flux, bootstrap, scripts de backup
+Jin/                # carpeta workspace (NO es un repo git)
+  Jin_Docs/         # BLUEPRINT, WORKFLOW, PROMPTS, ADRs transversales, STATUS.md
+  Jin_Core/         # NestJS orquestador
+  Jin_Executor/     # NestJS ejecución aislada (único que habla con K8s)
+  Jin_Web/          # React dashboard (deploy: Cloudflare Pages)
+  Jin_CLI/          # Ink CLI
+  Jin_Infra/        # Kustomize, Flux, bootstrap, scripts de backup
 ```
 
-Layout interno de `Yormun_Core`:
+Layout interno de `Jin_Core`:
 
 ```
-Yormun_Core/
+Jin_Core/
   src/
     telegram/        # grammY bot — módulo interno, NO app separada
     hitl/            # Clasificador HITL, timeouts, aprobaciones
@@ -149,9 +149,9 @@ Yormun_Core/
   Dockerfile
 ```
 
-`Yormun_Executor` sigue el mismo patrón (`src/`, `contracts/`, `Dockerfile`). Cada repo de app contiene su propio Dockerfile; Yormun_Infra solo tiene manifests y scripts. **Convención:** repos/carpetas en `Yormun_X`; nombres runtime de K8s (namespaces, services, imágenes, bucket) en minúscula kebab (`yormun-core`, `yormun-executor`) porque K8s lo exige.
+`Jin_Executor` sigue el mismo patrón (`src/`, `contracts/`, `Dockerfile`). Cada repo de app contiene su propio Dockerfile; Jin_Infra solo tiene manifests y scripts. **Convención:** repos/carpetas en `Jin_X`; nombres runtime de K8s (namespaces, services, imágenes, bucket) en minúscula kebab (`jin-core`, `jin-executor`) porque K8s lo exige.
 
-**Nota importante:** el bot de Telegram vive como módulo dentro de `Yormun_Core/src/telegram/`, no como app separada. Necesita acceso directo a los servicios de HITL, audit y ModelProvider — sacarlo a un proceso separado añadiría latencia de red innecesaria.
+**Nota importante:** el bot de Telegram vive como módulo dentro de `Jin_Core/src/telegram/`, no como app separada. Necesita acceso directo a los servicios de HITL, audit y ModelProvider — sacarlo a un proceso separado añadiría latencia de red innecesaria.
 
 ### 4.2 Módulos NestJS
 
@@ -178,14 +178,14 @@ Ningún `Deployment`, `StatefulSet`, `DaemonSet`, ni `Job` puede mergearse a `ma
 
 - Presupuesto de recursos por servicio: ver `BLUEPRINT.md` sección 3.1.
 
-- Validación: CI de Yormun_Infra ejecuta `kube-linter` (o `kubeval`) y rechaza YAMLs sin resources declarados.
+- Validación: CI de Jin_Infra ejecuta `kube-linter` (o `kubeval`) y rechaza YAMLs sin resources declarados.
 
 **Razón (ver ADR 0002):** sin límites explícitos, Kubernetes puede permitir que un pod con memory leak (típicamente código LLM-generado con bug) desplace a Postgres via OOMKilled. El impacto es asimétrico — perder un pod de Deno es recuperable, perder Postgres puede corromper el WAL. Los límites protegen la base de datos por diseño.
 
 ### 4.5 Contratos entre repos
 
 - **Prohibido copiar tipos a mano entre repos, y prohibido crear paquetes npm compartidos** sin ADR que lo justifique.
-- Yormun_Core y Yormun_Executor generan `contracts/openapi.json` desde su código (`@nestjs/swagger`) en CI.
+- Jin_Core y Jin_Executor generan `contracts/openapi.json` desde su código (`@nestjs/swagger`) en CI.
 - Consumidores generan tipos con `openapi-typescript` vía `pnpm generate:api`: web y cli desde core; core desde executor.
 - Cambios de API que crucen repos: retrocompatibles, o en dos pasos (expand → contract). Nunca un breaking change directo.
 
@@ -197,7 +197,7 @@ Ningún `Deployment`, `StatefulSet`, `DaemonSet`, ni `Job` puede mergearse a `ma
 
 Todo dato de origen externo (correos, PDFs, páginas web, mensajes de Telegram entrantes, contenido de Canvas) que entra al contexto de un LLM debe:
 
-1. Ser envuelto con `wrapUntrustedContent(content, source, sessionNonce)` de `Yormun_Core/src/security/injection-sanitizer.ts`. La función:
+1. Ser envuelto con `wrapUntrustedContent(content, source, sessionNonce)` de `Jin_Core/src/security/injection-sanitizer.ts`. La función:
    - Escapa caracteres HTML del contenido (`&`, `<`, `>`) para prevenir escape de delimitador.
    - Usa un tag con nonce por sesión: `<untrusted_content_{sessionNonce}>...</untrusted_content_{sessionNonce}>`.
    - El `sessionNonce` es un valor hexadecimal de 16 caracteres generado por `generateSessionNonce()` al inicio de cada sesión de agente.
@@ -221,13 +221,13 @@ El system prompt de cada agente debe incluir literalmente:
 
 ### 5.3 Separación de privilegios
 
-- El código de Yormun_Core no importa `dockerode`, `@kubernetes/client-node`, ni ningún cliente que hable con el runtime.
-- El código de Yormun_Executor es el único autorizado a hablar con Kubernetes.
+- El código de Jin_Core no importa `dockerode`, `@kubernetes/client-node`, ni ningún cliente que hable con el runtime.
+- El código de Jin_Executor es el único autorizado a hablar con Kubernetes.
 - Si necesitas ejecutar código, llama al Executor por HTTP interno.
 
 ### 5.4 HITL classifier
 
-- Cada tool se declara con su `hitlLevel` estático en `Yormun_Core/src/tools/registry.ts`.
+- Cada tool se declara con su `hitlLevel` estático en `Jin_Core/src/tools/registry.ts`.
 - El `hitlLevel` **jamás** se decide en runtime por el LLM.
 - Cambiar el `hitlLevel` de una tool requiere: (a) PR con revisión humana, (b) aprobación `dual-confirm` en el sistema para que el cambio tome efecto.
 
@@ -243,8 +243,9 @@ El system prompt de cada agente debe incluir literalmente:
 
 ### 5.7 Separación de dominios
 
-- Contenido generado por agentes (applets, previews) se sirve **solo** desde `yormungander.com`.
-- `yormun.com` es exclusivo del núcleo confiable (api, dash, grafana). Ver `BLUEPRINT.md` 5.2.
+- Contenido generado por agentes (applets, previews) se sirve **solo** desde el dominio sandbox, hoy `jinserver.com`.
+- `jeanfranck.com` y **todos sus subdominios** son zona de confianza: `jin.jeanfranck.com` (dashboard + API en `/api`) y el portafolio del owner en la raíz. Nunca se sirve output de agentes ahí. Ver `BLUEPRINT.md` 5.2.
+- La regla es por rol, no por hostname: lo que manda es la frontera confiable/sandbox, no los nombres concretos de hoy.
 
 ---
 
@@ -314,9 +315,9 @@ Para todo lo demás, tests pueden ir en paralelo o después, pero antes de merge
 
 Ver `docs/WORKFLOW.md`. Regla general:
 
-- Claude Code lidera: Yormun_Executor completo; en Yormun_Core: HITL, audit, budget, security, model-provider, memory.
-- Antigravity lidera: Yormun_Web, Yormun_CLI, Yormun_Infra; en Yormun_Core: integraciones y migrations.
-- Dentro de Yormun_Core, ningún archivo se edita simultáneamente por ambos.
+- Claude Code lidera: Jin_Executor completo; en Jin_Core: HITL, audit, budget, security, model-provider, memory.
+- Antigravity lidera: Jin_Web, Jin_CLI, Jin_Infra; en Jin_Core: integraciones y migrations.
+- Dentro de Jin_Core, ningún archivo se edita simultáneamente por ambos.
 
 ---
 
@@ -341,7 +342,7 @@ try {
 }
 ```
 
-Cada tipo de error tiene su clase custom que extiende `YormunError`. `YormunError` incluye `code`, `httpStatus` (si aplica), y `cause`.
+Cada tipo de error tiene su clase custom que extiende `JinError`. `JinError` incluye `code`, `httpStatus` (si aplica), y `cause`.
 
 ### 8.2 Logging
 
@@ -352,7 +353,7 @@ Cada tipo de error tiene su clase custom que extiende `YormunError`. `YormunErro
   logger.info({
     trace_id,
     session_id,
-    service: "yormun-core",
+    service: "jin-core",
     context: { ... }
   }, "mensaje humano");
   ```
@@ -383,13 +384,13 @@ Cada tipo de error tiene su clase custom que extiende `YormunError`. `YormunErro
 
 ### 9.2 Decisiones arquitectónicas
 
-- ADRs (Architecture Decision Records): transversales en `Yormun_Docs/docs/adr/`; específicos de un repo en su `docs/adr/`.
+- ADRs (Architecture Decision Records): transversales en `Jin_Docs/docs/adr/`; específicos de un repo en su `docs/adr/`.
 - Formato: contexto, decisión, consecuencias, alternativas consideradas.
 - Se escriben antes de implementar decisiones no triviales, no después.
 
 ### 9.3 Runbooks
 
-- Cada procedimiento operativo (rotar tokens, restore desde backup, escalar Modal manualmente, reconstruir la VM) tiene un runbook en `Yormun_Docs/docs/runbooks/`.
+- Cada procedimiento operativo (rotar tokens, restore desde backup, escalar Modal manualmente, reconstruir la VM) tiene un runbook en `Jin_Docs/docs/runbooks/`.
 
 ---
 

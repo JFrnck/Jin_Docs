@@ -2,7 +2,7 @@
 
 ## Contexto
 
-YORMUNGANDER orquesta agentes que ejecutan acciones con distinto grado de reversibilidad e impacto: desde leer un correo hasta hacer `git push --force`. Se necesita un mecanismo de control humano (Human-in-the-Loop) que sea:
+Jin orquesta agentes que ejecutan acciones con distinto grado de reversibilidad e impacto: desde leer un correo hasta hacer `git push --force`. Se necesita un mecanismo de control humano (Human-in-the-Loop) que sea:
 
 - Proporcional al riesgo real de cada acción (no todo necesita aprobación, pero nada destructivo se ejecuta sin ella).
 - A prueba de manipulación: un prompt injection o un bug del LLM no debe poder degradar el nivel de control de una tool.

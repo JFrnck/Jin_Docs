@@ -22,7 +22,7 @@ Detectado durante el diseño de la Fase 2.2 (HITL classifier + audit log), antes
 
 - El hash chain de `audit_log` queda genuinamente inmutable — ninguna fila se toca después de escrita.
 - Reconstruir el ciclo de vida de una aprobación es un filtro por `request_id`, no una inferencia por proximidad de timestamp/tool_name (frágil y ambigua).
-- Se añade una tabla más al schema de Yormun_Core; su ciclo de vida (insert al pedir, update mientras se decide, delete/mark-resolved al terminar) es explícitamente distinto del de `audit_log` — no deben confundirse ni fusionarse.
+- Se añade una tabla más al schema de Jin_Core; su ciclo de vida (insert al pedir, update mientras se decide, delete/mark-resolved al terminar) es explícitamente distinto del de `audit_log` — no deben confundirse ni fusionarse.
 
 ## Alternativas consideradas
 

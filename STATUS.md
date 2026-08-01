@@ -1,6 +1,6 @@
 # STATUS
 
-## Última actualización: 2026-07-25 (America/Lima) — actualización 9
+## Última actualización: 2026-07-31 (America/Lima) — actualización 10
 
 > **Antigravity ya está activo** (ver abajo, Fase 3.1/2.4/4.2). Retoma ownership normal de `docs/WORKFLOW.md` sección 2 — Claude Code ya no asume tareas `[ANTIGRAVITY]` por defecto, salvo negociación puntual vía esta misma nota.
 
@@ -9,15 +9,15 @@
 ### Claude Code
 
 - **Repo:** ninguno activo ahora mismo.
-- **Descripción:** Fase 4.1 (Budget guard + kill switch) completa — [PR #6](https://github.com/JFrnck/Yormun_Core/pull/6), **mergeado**. Prerequisito "ejecutar al aprobar" completo — [PR #8](https://github.com/JFrnck/Yormun_Core/pull/8), **mergeado**. Revisión de 3 rondas + merge de [PR #9](https://github.com/JFrnck/Yormun_Core/pull/9) (Fase 4.2, Antigravity). Fase 4.3 (Memoria extendida sqlite-vec) completa — [PR #10](https://github.com/JFrnck/Yormun_Core/pull/10), **mergeado**. Roadmap Fase 5-7 planificado y prompts escritos en `docs/PROMPTS.md` (2026-07-25), incluida la Fase 5.4 (multi-agente) agregada a pedido del owner. Fase 5.1 (agent loop) completa — [PR #11](https://github.com/JFrnck/Yormun_Core/pull/11), **mergeado**. Fase 5.2 (`runCode` end-to-end + Modal real) completa en ambos repos — [Yormun_Executor PR #3](https://github.com/JFrnck/Yormun_Executor/pull/3) y [Yormun_Core PR #12](https://github.com/JFrnck/Yormun_Core/pull/12), **ambos mergeados**. Ver detalle abajo.
+- **Descripción:** Fase 4.1 (Budget guard + kill switch) completa — [PR #6](https://github.com/JFrnck/Jin_Core/pull/6), **mergeado**. Prerequisito "ejecutar al aprobar" completo — [PR #8](https://github.com/JFrnck/Jin_Core/pull/8), **mergeado**. Revisión de 3 rondas + merge de [PR #9](https://github.com/JFrnck/Jin_Core/pull/9) (Fase 4.2, Antigravity). Fase 4.3 (Memoria extendida sqlite-vec) completa — [PR #10](https://github.com/JFrnck/Jin_Core/pull/10), **mergeado**. Roadmap Fase 5-7 planificado y prompts escritos en `docs/PROMPTS.md` (2026-07-25), incluida la Fase 5.4 (multi-agente) agregada a pedido del owner. Fase 5.1 (agent loop) completa — [PR #11](https://github.com/JFrnck/Jin_Core/pull/11), **mergeado**. Fase 5.2 (`runCode` end-to-end + Modal real) completa en ambos repos — [Jin_Executor PR #3](https://github.com/JFrnck/Jin_Executor/pull/3) y [Jin_Core PR #12](https://github.com/JFrnck/Jin_Core/pull/12), **ambos mergeados**. Ver detalle abajo.
 - **Próximo:** ninguno activo — Fase 5.4 (multi-agente) y Fase 5.5 (pods de servicio, ahora desbloqueada tras 5.2) quedan libres para arrancar.
 
 ### Antigravity
 
-- **Repo:** Yormun_Core
-- **Rama:** `feature/antigravity/google-workspace` — [PR #9](https://github.com/JFrnck/Yormun_Core/pull/9), **mergeado a `main`, rama borrada**.
+- **Repo:** Jin_Core
+- **Rama:** `feature/antigravity/google-workspace` — [PR #9](https://github.com/JFrnck/Jin_Core/pull/9), **mergeado a `main`, rama borrada**.
 - **Descripción:** Fase 4.2 completa — Google Calendar + Gmail (`src/integrations/google/`). **Fin de Fase 4.2.**
-- **Estado:** 🟢 Sin tarea activa — **Fase 5.3 (sesiones reales en Telegram + memoria) ya está desbloqueada**, requiere Fase 5.1 (agent loop, mergeado en [PR #11](https://github.com/JFrnck/Yormun_Core/pull/11)) — leer el prompt de 5.3 en `docs/PROMPTS.md` antes de arrancar, especialmente el contrato de registro de tools que documenta la sección "Fase 5.1 — resumen técnico" abajo.
+- **Estado:** 🟢 Sin tarea activa — **Fase 5.3 (sesiones reales en Telegram + memoria) ya está desbloqueada**, requiere Fase 5.1 (agent loop, mergeado en [PR #11](https://github.com/JFrnck/Jin_Core/pull/11)) — leer el prompt de 5.3 en `docs/PROMPTS.md` antes de arrancar, especialmente el contrato de registro de tools que documenta la sección "Fase 5.1 — resumen técnico" abajo.
 - **Archivos creados/modificados:** `src/integrations/google/` (`GoogleOAuthService` con `getDaysSinceLastRefresh()`, Calendar client/tools, Gmail client/tools con sanitización anti-CRLF en `to`/`subject`), migración `drizzle/0003_google_oauth_state.sql` + `.down.sql`, `GoogleModule` registrando executors en `ToolExecutorRegistry`, comando `/google-oauth-refreshed` + alerta proactiva a Telegram cuando `days >= 6` (con dedupe diario). 193 tests unitarios + 40 de integración en Postgres real + e2e, CI GitHub Actions verde — **verificado independientemente por Claude Code en 3 rondas de revisión** (ver sección de feedback abajo), no solo el self-report.
 
 
@@ -66,7 +66,7 @@ Claude Code revisó el plan actualizado (ya consumiendo `wrapUntrustedContent`/`
    });
    ```
    El router no copia `maxOutputTokens`/`temperature` del profile automáticamente — es responsabilidad del caller pasarlos explícitos.
-2. **El stub de `canvasScheduleStudyBlock` usa la excepción equivocada.** El plan dice seguir "el patrón `ModalService`", pero ese patrón (`Yormun_Executor/src/modal/errors.ts`) es `ModalNotImplementedError extends YormunError` — clase propia con `code`/`httpStatus`/`cause` — no `NotImplementedException` de `@nestjs/common`. `AGENTS.md` §8.1 exige que todo error tenga su clase custom extendiendo `YormunError`. Debe ser `CalendarNotImplementedError extends YormunError` (`code: 'CANVAS_CALENDAR_NOT_IMPLEMENTED'`, `httpStatus: 501`) en `src/integrations/canvas/errors.ts`.
+2. **El stub de `canvasScheduleStudyBlock` usa la excepción equivocada.** El plan dice seguir "el patrón `ModalService`", pero ese patrón (`Jin_Executor/src/modal/errors.ts`) es `ModalNotImplementedError extends JinError` — clase propia con `code`/`httpStatus`/`cause` — no `NotImplementedException` de `@nestjs/common`. `AGENTS.md` §8.1 exige que todo error tenga su clase custom extendiendo `JinError`. Debe ser `CalendarNotImplementedError extends JinError` (`code: 'CANVAS_CALENDAR_NOT_IMPLEMENTED'`, `httpStatus: 501`) en `src/integrations/canvas/errors.ts`.
 3. **Falta sanitizar `canvasListAssignments`, no solo `canvasGetCourseContent`.** El plan envuelve con `wrapUntrustedContent` el resultado de `canvasGetCourseContent` pero no el de `canvasListAssignments` — y esa tool también es `hitlLevel: 'auto'` (su resultado vuelve directo al contexto del LLM como resultado de tool-call). Títulos/descripciones de tareas son contenido externo igual que el contenido de curso — `AGENTS.md` §5.1 exige envolver ambas.
 
 Menor (no bloqueante): usar `.spec.ts` co-ubicado para los tests, no una carpeta `__tests__/` separada — es la convención del resto del repo (hitl, audit, model-provider).
@@ -75,13 +75,13 @@ Lo que el plan sí acierta en esta ronda: consumo correcto del sanitizer y el mo
 
 ## Feedback Ronda 1 para Antigravity — plan Fase 3.1 (Canvas), enviado 2026-07-23 (ya resuelto)
 
-Claude Code revisó el plan propuesto (Canvas client + tools + shadowing cron) contra `AGENTS.md`, `docs/PROMPTS.md` §3.1, las golden rules de `docs/BLUEPRINT.md` §15 y el estado real del código en `Yormun_Core`. Ajustar antes de implementar:
+Claude Code revisó el plan propuesto (Canvas client + tools + shadowing cron) contra `AGENTS.md`, `docs/PROMPTS.md` §3.1, las golden rules de `docs/BLUEPRINT.md` §15 y el estado real del código en `Jin_Core`. Ajustar antes de implementar:
 
-1. **Sanitizador de injection incorrecto.** El plan propone un `canvas-sanitizer.ts` propio con tag genérico `<untrusted_content>`. `AGENTS.md` §5.1 (golden rule #6) exige una función **compartida** `wrapUntrustedContent(content, source, sessionNonce)` en `src/security/injection-sanitizer.ts`, con tag `<untrusted_content_{sessionNonce}>` (nonce por sesión + escape HTML) y `generateSessionNonce()`. Ese módulo **no existe todavía** (`src/security/` solo tiene `.gitkeep`). Además `Yormun_Docs/CLAUDE.md` §3 asigna `src/security/**` a Claude Code, no a Antigravity — coordinar antes de tocarlo, no reimplementar una versión propia y más débil dentro de `integrations/canvas/`.
+1. **Sanitizador de injection incorrecto.** El plan propone un `canvas-sanitizer.ts` propio con tag genérico `<untrusted_content>`. `AGENTS.md` §5.1 (golden rule #6) exige una función **compartida** `wrapUntrustedContent(content, source, sessionNonce)` en `src/security/injection-sanitizer.ts`, con tag `<untrusted_content_{sessionNonce}>` (nonce por sesión + escape HTML) y `generateSessionNonce()`. Ese módulo **no existe todavía** (`src/security/` solo tiene `.gitkeep`). Además `Jin_Docs/CLAUDE.md` §3 asigna `src/security/**` a Claude Code, no a Antigravity — coordinar antes de tocarlo, no reimplementar una versión propia y más débil dentro de `integrations/canvas/`.
 2. **Falta la infraestructura de model routing.** `PROMPTS.md` §3.1 exige usar Gemini 3.1 Pro para el resumen del shadowing; golden rule #5 prohíbe modelos hardcoded — todo debe pasar por `model-provider/router.ts` + `config/models.yaml` (ver `docs/MODEL_ROUTING.md`). Verificado: `src/model-provider/` solo tiene `.gitkeep`, no existe `config/models.yaml`, no hay SDK de LLM instalado en `package.json`. El plan no menciona cómo se generaría el resumen — esto es un prerequisito real, no un detalle menor.
 3. **Referencia rota en AGENTS.md §5.1:** cita "ver ADR 0002" para el diseño nonce del sanitizador, pero ADR 0002 es sobre `audit_log`/`request_id` (colisión de numeración heredada del bundle de docs original, antes de que existiera ningún ADR). Cuando se construya el sanitizador, escribir el ADR real (sería el 0004).
 4. **Confirmar con el owner** URL de Canvas, token y curso de prueba antes de escribir código (paso explícito de `PROMPTS.md` §3.1, punto 3) — no asumir env vars sin esa conversación.
-5. **`canvasScheduleStudyBlock` depende de Google Calendar, que no existe.** No hay módulo de Calendar en el repo. Ya existe un tool stub `createCalendarEvent` (Fase 2.2, sin implementación real) en `src/tools/registry.ts` — aclarar si `canvasScheduleStudyBlock` lo reusa o si son dos tools distintos, y en cualquier caso stubear la dependencia honestamente (patrón `ModalService` 501 de Yormun_Executor) en vez de una implementación parcial silenciosa.
+5. **`canvasScheduleStudyBlock` depende de Google Calendar, que no existe.** No hay módulo de Calendar en el repo. Ya existe un tool stub `createCalendarEvent` (Fase 2.2, sin implementación real) en `src/tools/registry.ts` — aclarar si `canvasScheduleStudyBlock` lo reusa o si son dos tools distintos, y en cualquier caso stubear la dependencia honestamente (patrón `ModalService` 501 de Jin_Executor) en vez de una implementación parcial silenciosa.
 6. **`CANVAS_BASE_URL`/`CANVAS_API_TOKEN` no deberían ser opcionales.** `AGENTS.md` línea 371 exige fail-fast si falta una variable requerida. Marcarlas opcionales permite que el módulo de Canvas quede a medias en silencio — siendo Fase 3 específicamente para habilitar Canvas, deberían ser requeridas.
 
 Lo que el plan sí acierta: los 3 niveles HITL coinciden con blueprint/PROMPTS, el rate limit de 30 req/min es correcto, mockear el API de Canvas en tests es válido (`AGENTS.md` §6.3 permite mocks de APIs externas), y `external_inputs_summary` ya existe en el schema de `audit_log` — no hace falta migración ahí.
@@ -90,28 +90,28 @@ Lo que el plan sí acierta: los 3 niveles HITL coinciden con blueprint/PROMPTS, 
 
 | Repo | PR | Contenido | Estado |
 | --- | --- | --- | --- |
-| Yormun_Infra | [#1](https://github.com/JFrnck/Yormun_Infra/pull/1) | Fase 1.1: manifests K3s, bootstrap, runbook | ✅ mergeado |
-| Yormun_Infra | ~~#2~~ → [#3](https://github.com/JFrnck/Yormun_Infra/pull/3) | Fase 1.2: backups + verify-restore | ✅ mergeado (ver nota abajo) |
-| Yormun_Core | [#1](https://github.com/JFrnck/Yormun_Core/pull/1) | Fase 2.1: scaffolding NestJS | ✅ mergeado |
-| Yormun_Core | [#2](https://github.com/JFrnck/Yormun_Core/pull/2) | Fase 2.2: HITL classifier + audit log | ✅ mergeado |
-| Yormun_Executor | [#1](https://github.com/JFrnck/Yormun_Executor/pull/1) | Fase 2.1: scaffolding NestJS | ✅ mergeado |
-| Yormun_Executor | [#2](https://github.com/JFrnck/Yormun_Executor/pull/2) | Fase 2.3: RBAC + ejecución aislada | ✅ mergeado |
-| Yormun_Web | [#1](https://github.com/JFrnck/Yormun_Web/pull/1) | Fase 2.1: scaffolding Vite+React | ✅ mergeado |
-| Yormun_CLI | [#1](https://github.com/JFrnck/Yormun_CLI/pull/1) | Fase 2.1: scaffolding Ink | ✅ mergeado |
-| Yormun_Infra | [#4](https://github.com/JFrnck/Yormun_Infra/pull/4) | RBAC del ServiceAccount de yormun-executor (ADR 0003 punto 3, follow-up de Fase 2.3) | ✅ mergeado |
-| Yormun_Core | [#3](https://github.com/JFrnck/Yormun_Core/pull/3) | Prerequisitos Fase 3.1: injection-sanitizer + model-provider (ADR 0004) | ✅ mergeado |
-| Yormun_Core | [#4](https://github.com/JFrnck/Yormun_Core/pull/4) | Fase 3.1: integración Canvas LMS + Shadowing Académico | ✅ mergeado |
-| Yormun_Core | [#5](https://github.com/JFrnck/Yormun_Core/pull/5) | Fase 2.4: bot de Telegram (grammY + webhook + auth + secret_token) | ✅ mergeado |
-| Yormun_Core | [#6](https://github.com/JFrnck/Yormun_Core/pull/6) | Fase 4.1: budget guard + kill switch | ✅ mergeado |
-| Yormun_Core | [#7](https://github.com/JFrnck/Yormun_Core/pull/7) | Prerequisito Fase 4.2: 4 tools de Calendar en registry.ts | ✅ mergeado |
-| Yormun_Core | [#8](https://github.com/JFrnck/Yormun_Core/pull/8) | Prerequisito Fase 4.2: mecanismo "ejecutar al aprobar" (`ToolExecutorRegistry` + `ApprovalExecutionService`) | ✅ mergeado |
-| Yormun_Core | [#9](https://github.com/JFrnck/Yormun_Core/pull/9) | Fase 4.2: integración Google Calendar + Gmail (OAuth Testing, rate limiting, sanitización, diferido HITL) | ✅ mergeado (3 rondas de revisión, ver feedback abajo) |
-| Yormun_Core | [#10](https://github.com/JFrnck/Yormun_Core/pull/10) | Fase 4.3: memoria extendida del agente con sqlite-vec | ✅ mergeado |
-| Yormun_Core | [#11](https://github.com/JFrnck/Yormun_Core/pull/11) | Fase 5.1: agent loop con tool-calling, plan-and-solve y self-correction | ✅ mergeado |
-| Yormun_Executor | [#3](https://github.com/JFrnck/Yormun_Executor/pull/3) | Fase 5.2: `ModalService` real (sandbox Python/pandas) + ruteo local/remoto por `language` | ✅ mergeado |
-| Yormun_Core | [#12](https://github.com/JFrnck/Yormun_Core/pull/12) | Fase 5.2: tool `runCode` en registry + `src/executor-client/` (cierra el loop con el Executor) | ✅ mergeado |
+| Jin_Infra | [#1](https://github.com/JFrnck/Jin_Infra/pull/1) | Fase 1.1: manifests K3s, bootstrap, runbook | ✅ mergeado |
+| Jin_Infra | ~~#2~~ → [#3](https://github.com/JFrnck/Jin_Infra/pull/3) | Fase 1.2: backups + verify-restore | ✅ mergeado (ver nota abajo) |
+| Jin_Core | [#1](https://github.com/JFrnck/Jin_Core/pull/1) | Fase 2.1: scaffolding NestJS | ✅ mergeado |
+| Jin_Core | [#2](https://github.com/JFrnck/Jin_Core/pull/2) | Fase 2.2: HITL classifier + audit log | ✅ mergeado |
+| Jin_Executor | [#1](https://github.com/JFrnck/Jin_Executor/pull/1) | Fase 2.1: scaffolding NestJS | ✅ mergeado |
+| Jin_Executor | [#2](https://github.com/JFrnck/Jin_Executor/pull/2) | Fase 2.3: RBAC + ejecución aislada | ✅ mergeado |
+| Jin_Web | [#1](https://github.com/JFrnck/Jin_Web/pull/1) | Fase 2.1: scaffolding Vite+React | ✅ mergeado |
+| Jin_CLI | [#1](https://github.com/JFrnck/Jin_CLI/pull/1) | Fase 2.1: scaffolding Ink | ✅ mergeado |
+| Jin_Infra | [#4](https://github.com/JFrnck/Jin_Infra/pull/4) | RBAC del ServiceAccount de jin-executor (ADR 0003 punto 3, follow-up de Fase 2.3) | ✅ mergeado |
+| Jin_Core | [#3](https://github.com/JFrnck/Jin_Core/pull/3) | Prerequisitos Fase 3.1: injection-sanitizer + model-provider (ADR 0004) | ✅ mergeado |
+| Jin_Core | [#4](https://github.com/JFrnck/Jin_Core/pull/4) | Fase 3.1: integración Canvas LMS + Shadowing Académico | ✅ mergeado |
+| Jin_Core | [#5](https://github.com/JFrnck/Jin_Core/pull/5) | Fase 2.4: bot de Telegram (grammY + webhook + auth + secret_token) | ✅ mergeado |
+| Jin_Core | [#6](https://github.com/JFrnck/Jin_Core/pull/6) | Fase 4.1: budget guard + kill switch | ✅ mergeado |
+| Jin_Core | [#7](https://github.com/JFrnck/Jin_Core/pull/7) | Prerequisito Fase 4.2: 4 tools de Calendar en registry.ts | ✅ mergeado |
+| Jin_Core | [#8](https://github.com/JFrnck/Jin_Core/pull/8) | Prerequisito Fase 4.2: mecanismo "ejecutar al aprobar" (`ToolExecutorRegistry` + `ApprovalExecutionService`) | ✅ mergeado |
+| Jin_Core | [#9](https://github.com/JFrnck/Jin_Core/pull/9) | Fase 4.2: integración Google Calendar + Gmail (OAuth Testing, rate limiting, sanitización, diferido HITL) | ✅ mergeado (3 rondas de revisión, ver feedback abajo) |
+| Jin_Core | [#10](https://github.com/JFrnck/Jin_Core/pull/10) | Fase 4.3: memoria extendida del agente con sqlite-vec | ✅ mergeado |
+| Jin_Core | [#11](https://github.com/JFrnck/Jin_Core/pull/11) | Fase 5.1: agent loop con tool-calling, plan-and-solve y self-correction | ✅ mergeado |
+| Jin_Executor | [#3](https://github.com/JFrnck/Jin_Executor/pull/3) | Fase 5.2: `ModalService` real (sandbox Python/pandas) + ruteo local/remoto por `language` | ✅ mergeado |
+| Jin_Core | [#12](https://github.com/JFrnck/Jin_Core/pull/12) | Fase 5.2: tool `runCode` en registry + `src/executor-client/` (cierra el loop con el Executor) | ✅ mergeado |
 
-**Nota — Yormun_Infra #2 se reemplazó por #3:** al mergear #1 con `--delete-branch`, GitHub cerró automáticamente #2 porque su rama base (`feature/claude/infra-base`, la de #1) dejó de existir — efecto colateral no documentado de GitHub en PRs apilados, no una acción intencional. Un PR cerrado así no se puede reabrir ni re-apuntar vía API una vez cerrado. Recuperado abriendo #3 desde la misma rama head (`feature/claude/infra-backups`, intacta) directo contra `main`; contenido idéntico (26 archivos, 1128 inserciones), CI verde, mergeado normalmente.
+**Nota — Jin_Infra #2 se reemplazó por #3:** al mergear #1 con `--delete-branch`, GitHub cerró automáticamente #2 porque su rama base (`feature/claude/infra-base`, la de #1) dejó de existir — efecto colateral no documentado de GitHub en PRs apilados, no una acción intencional. Un PR cerrado así no se puede reabrir ni re-apuntar vía API una vez cerrado. Recuperado abriendo #3 desde la misma rama head (`feature/claude/infra-backups`, intacta) directo contra `main`; contenido idéntico (26 archivos, 1128 inserciones), CI verde, mergeado normalmente.
 
 **Lección para futuros PRs apilados** (aplicada ya en Core y Executor sin incidentes): mergear el PR padre **sin** `--delete-branch` → `gh pr edit <hijo> --base main` → verificar que el hijo quede limpio → **recién entonces** borrar la rama vieja del padre → mergear el hijo con `--delete-branch`.
 
@@ -119,54 +119,58 @@ Los `"name": "temp-*"` de `package.json` en Web y CLI ya no aplican como pendien
 
 ## Decisiones del owner
 
-- **2026-07-19 — ORM: Drizzle** (recomendación de ANALISIS §5 aceptada). En uso en Yormun_Core desde la Fase 2.2 (PR #2).
+- **2026-07-19 — ORM: Drizzle** (recomendación de ANALISIS §5 aceptada). En uso en Jin_Core desde la Fase 2.2 (PR #2).
 - **2026-07-19 — Observabilidad Fase 1: mínima** — Prometheus + Loki + Grafana básicos; **Tempo y PgBouncer pospuestos** hasta que duelan.
 - **2026-07-21 — Testing: Vitest, no Jest.** Migrado en Core y Executor. **Si Antigravity vuelve a tocar estos repos, NO revertir a Jest.**
-- **2026-07-21 — BLUEPRINT 9.5 corregido (ADR 0002):** `audit_log` gana columna `request_id`; estado "pendiente" en tabla mutable separada `pending_approvals`. Implementado en Yormun_Core PR #2.
-- **2026-07-21 — ADR 0001 (4 niveles HITL)** escrito e implementado en Yormun_Core PR #2.
+- **2026-07-21 — BLUEPRINT 9.5 corregido (ADR 0002):** `audit_log` gana columna `request_id`; estado "pendiente" en tabla mutable separada `pending_approvals`. Implementado en Jin_Core PR #2.
+- **2026-07-21 — ADR 0001 (4 niveles HITL)** escrito e implementado en Jin_Core PR #2.
 - **2026-07-22 — Testing de Executor: K3s real vía testcontainers, no mocks del cliente de Kubernetes** (`@testcontainers/k3s`). El owner eligió explícitamente esta opción por sobre mockear — ver ADR 0003 punto 5. Costo aceptado: CI más lento (~35-75s típico; se observó flakiness de red anidada containerd-en-Docker en algunas corridas, mitigada con reintentos).
-- **2026-07-22 — ADR 0003 (Executor: separación + hallazgo `deno eval`)** escrito e implementado en Yormun_Executor PR #2.
+- **2026-07-22 — ADR 0003 (Executor: separación + hallazgo `deno eval`)** escrito e implementado en Jin_Executor PR #2.
 - **2026-07-23 — Canvas LMS: single-tenant confirmado, sin soporte multi-usuario.** El owner preguntó si Canvas soportaría "cambiar de usuario" (cuentas de terceros); se le presentaron 3 opciones (single-tenant / multi-cuenta propia / multi-tenant real) y confirmó mantener single-tenant, consistente con BLUEPRINT §1-2 ("plataforma personal", no multi-región/HA). Un solo Personal Access Token de Canvas (del owner) → Infisical → REST API, como ya especifica §7.1. **No implementar** `user_id` en `audit_log`/`pending_approvals`, aislamiento de memory por usuario, ni enrutamiento HITL multi-persona — si en el futuro se reconsidera, requiere un ADR nuevo porque cambia el modelo de seguridad completo del proyecto.
-- **2026-07-23 — Prerequisitos de Fase 3.1 (sanitizer + model-provider): los construye Claude Code, no Antigravity.** El plan de Antigravity para Canvas proponía construir `src/security/injection-sanitizer.ts` y `src/model-provider/**` dentro de su propia rama — ambos son área exclusiva de Claude Code por `WORKFLOW.md` §2.2 (infraestructura compartida que futuras integraciones como Gmail/Telegram también necesitarán). El owner confirmó que Claude Code los construyera aparte primero; Antigravity los consume una vez mergeados. Ver PR #3 de Yormun_Core y ADR 0004.
+- **2026-07-23 — Prerequisitos de Fase 3.1 (sanitizer + model-provider): los construye Claude Code, no Antigravity.** El plan de Antigravity para Canvas proponía construir `src/security/injection-sanitizer.ts` y `src/model-provider/**` dentro de su propia rama — ambos son área exclusiva de Claude Code por `WORKFLOW.md` §2.2 (infraestructura compartida que futuras integraciones como Gmail/Telegram también necesitarán). El owner confirmó que Claude Code los construyera aparte primero; Antigravity los consume una vez mergeados. Ver PR #3 de Jin_Core y ADR 0004.
 - **2026-07-23 — Después de Fase 3.1, siguiente prioridad: terminar Fase 2.4 (bot de Telegram), no Fase 4.x.** La Tarea A de Fase 2.4 (`model-provider`) ya quedó hecha de rebote en PR #3. Queda solo la Tarea B (`src/telegram/`, grammY). El owner la priorizó sobre Budget guard (4.1)/Google Calendar (4.2)/Memoria (4.3) porque el sistema HITL ya construido no tiene todavía ningún canal real de notificación/aprobación.
-- **2026-07-24 — Fase 4.1: alertas de budget/kill switch van directo a Telegram, no vía Alertmanager.** BLUEPRINT 9.6/10.4 especifica "Alertmanager → Telegram", pero Alertmanager nunca se desplegó (Fase 1 observability quedó explícitamente mínima: Prometheus + Loki + Grafana). Desplegarlo ahora era trabajo de infra fuera de alcance de Fase 4.1. Se decidió notificar directo desde `Yormun_Core` al bot ya construido (Fase 2.4) — mismo destino final, sin la dependencia de infra nueva. Documentado en el plan de la fase, no requirió pausar para preguntar.
+- **2026-07-24 — Fase 4.1: alertas de budget/kill switch van directo a Telegram, no vía Alertmanager.** BLUEPRINT 9.6/10.4 especifica "Alertmanager → Telegram", pero Alertmanager nunca se desplegó (Fase 1 observability quedó explícitamente mínima: Prometheus + Loki + Grafana). Desplegarlo ahora era trabajo de infra fuera de alcance de Fase 4.1. Se decidió notificar directo desde `Jin_Core` al bot ya construido (Fase 2.4) — mismo destino final, sin la dependencia de infra nueva. Documentado en el plan de la fase, no requirió pausar para preguntar.
 - **2026-07-24 — Fase 4.1: `sessionId` opcional en `BudgetGuardedModelRouter`, no una abstracción de sesión persistente.** El código no tenía ningún concepto de "sesión" (ningún caller pasaba un ID). Se agregó un `sessionId` opcional — si no se pasa, cada llamada es su propia sesión (UUID nuevo). Telegram usa un `sessionId` fijo por chat (conversación libre comparte presupuesto); Canvas/shadowing no pasa ninguno (cada corrida nocturna es una sola llamada). Evita inventar una abstracción de sesión persistente que nada más en el sistema necesita todavía.
 - **2026-07-24 — Fase 4.2: OAuth scopes confirmados por el owner.** `calendar` (lectura/escritura de eventos), `gmail.readonly` (leer correos), `gmail.send` (enviar/responder) — los 3 mínimos necesarios para las tools ya declaradas, sin scopes de administración ni de otras APIs de Workspace.
 - **2026-07-24 — Fase 4.2: el gap de "reset de la alerta de OAuth" se corrige antes de mergear PR #9, no se acepta como deuda.** Al revisar el PR se encontró que `updateLastRefreshedAt()` no tenía ningún caller real y la alerta de vencimiento solo logueaba (nunca le llegaba nada al owner). Se le presentaron 2 opciones: mergear igual y dejarlo como follow-up, o pedirle a Antigravity un fix acotado antes de mergear. Eligió lo segundo — mismo criterio que otras veces con hallazgos de seguridad/HITL: si el fix es chico y acotado, se resuelve antes de dar la fase por cerrada en vez de acumular deuda. Resultado: comando `/google-oauth-refreshed` + alerta proactiva real, ver "PR #9 (Google Calendar + Gmail): 3 rondas de revisión".
 - **2026-07-24 — Fase 4.2: el hallazgo "no existe mecanismo de ejecutar-al-aprobar" lo construye Claude Code primero, no Antigravity.** Al revisar el plan de Antigravity para Google Calendar/Gmail se detectó que ningún tool `confirm` anterior había tenido efectos reales (Canvas es todo `auto`; `sendEmail` se declaró en Fase 2.2 pero nunca se implementó) — por lo que `TelegramBotService.processApproval()` nunca ejecutaba nada, solo cambiaba estado y auditaba, y `pending_approvals` no guardaba el payload de la acción. Se le presentaron 2 opciones al owner: que Antigravity resolviera esto de forma acotada a sus 2 tools, o que Claude Code construyera el mecanismo genérico primero. Eligió que Claude Code lo construyera primero (mismo criterio que los prerequisitos de Fase 3.1: infraestructura compartida que futuras integraciones también necesitarán). Resultado: PR #8 (`ToolExecutorRegistry` + `ApprovalExecutionService`), ver detalle en la sección "Fase 4.2 — decisiones y prerequisitos".
 - **2026-07-25 — Ejecución autónoma orientada a objetivos + multi-agente: requisito nuevo del owner, incorporado al roadmap.** El owner pidió explícitamente (a) que el agente itere sobre sí mismo con plan-and-solve y self-correction (incorporado como requisito de Fase 5.1, no fase aparte — es la naturaleza del mismo loop), y (b) que el orquestador pueda delegar a dos o más sub-agentes que se coordinen sin discrepar (Fase 5.4 nueva). Decisión de diseño fijada: los sub-agentes NO se comunican peer-to-peer — se coordinan vía el orquestador con un task ledger compartido (hub-and-spoke/blackboard), porque la comunicación libre A2A produce exactamente las discrepancias que se quieren evitar, multiplica el riesgo runaway y rompe el embudo único de HITL/audit. Profundidad de delegación = 1 (un sub-agente no crea sub-agentes). Requiere ADR nuevo al implementarse.
 - **2026-07-25 — Refinamiento del ledger (owner): tablero estilo Jira persistido + escalera de decisión + branches seguras.** El owner refinó el diseño de 5.4: el ledger es un tablero tipo Jira (tickets con hilo de comentarios donde los agentes sí se responden entre sí — a través del tablero, nunca por canal privado), **persistido en Postgres** (un objetivo puede quedar días bloqueado en un HITL y debe sobrevivir restarts; el dashboard de Fase 6 lo renderiza como board). Las discrepancias entre agentes se registran como conflicto visible, no se suprimen, y las resuelve una escalera explícita: bajo riesgo → el orquestador decide en modo-auto dejando registrado el porqué; conflicto material o de nivel confirm → escala al owner vía HITL (el owner es siempre el nivel máximo). Trabajo sobre código: cada sub-agente en su propia branch (`feature/agent/<ticket>`), jamás en main; el merge a main es una tool `confirm` aprobada por el owner.
-- **2026-07-25 — Requisito nuevo del owner: los agentes pueden levantar apps corriendo (dev servers, backends) con puertos expuestos — Fase 5.5 nueva.** Hoy el Executor solo soporta pods run-to-completion; no existe forma de correr `npm run dev` ni servicios de larga vida. Se agregó la Fase 5.5 [Claude Code]: pods de servicio en `agents-sandbox` + Service + IngressRoute bajo `https://<slug>.yormungander.com` (la regla de oro #10 ya lo anticipaba: una preview app corriendo ES contenido generado por agentes, jamás en yormun.com), con TTL obligatorio + reaper, sin secretos, egress whitelist, `startPreviewService` con hitlLevel `confirm`. Amplía el RBAC del Executor (Services/IngressRoutes solo en agents-sandbox) — requiere ADR.
+- **2026-07-25 — Requisito nuevo del owner: los agentes pueden levantar apps corriendo (dev servers, backends) con puertos expuestos — Fase 5.5 nueva.** Hoy el Executor solo soporta pods run-to-completion; no existe forma de correr `npm run dev` ni servicios de larga vida. Se agregó la Fase 5.5 [Claude Code]: pods de servicio en `agents-sandbox` + Service + IngressRoute bajo `https://<slug>.jinserver.com` (la regla de oro #10 ya lo anticipaba: una preview app corriendo ES contenido generado por agentes, jamás en jeanfranck.com), con TTL obligatorio + reaper, sin secretos, egress whitelist, `startPreviewService` con hitlLevel `confirm`. Amplía el RBAC del Executor (Services/IngressRoutes solo en agents-sandbox) — requiere ADR.
+- **2026-07-31 — El producto pasa a llamarse Jin.** Reemplaza tanto "Yormun" como "Yormungander" en los 6 repos, nombres de paquete (`jin-core`, `jin-executor`), namespaces de K8s (`jin`, `jin-executor`), la clase base de errores (`YormunError` → `JinError`) y los repos de GitHub (`Jin_*`). Se hizo antes de la Fase 7.1 a propósito: nada estaba desplegado todavía, así que el rename fue mecánico y sin downtime. GitHub redirige las URLs viejas, por lo que los links a PRs anteriores en este archivo siguen funcionando.
+- **2026-07-31 — Arquitectura de dominios: tres zonas de confianza sobre dos dominios registrables.** `jeanfranck.com` es el portafolio personal del owner (no forma parte de Jin); `jin.jeanfranck.com` es el núcleo confiable (dashboard + API bajo el path `/api`); `jinserver.com` es la zona sandbox de contenido generado por agentes. **La API va como path y no como subdominio** para tener un solo origen: cero CORS y cookie de sesión *host-only* con prefijo `__Host-` en vez de tener que abrirse a `.jeanfranck.com`.
+- **2026-07-31 — Se evaluó y descartó consolidar todo en `jeanfranck.com`.** El owner preguntó si se podía prescindir del segundo dominio. Se puede técnicamente (cookies `__Host-` + validación estricta del header `Origin` + CSP cubren los dos ataques principales), pero cambia una garantía impuesta por el navegador por disciplina de código: con dominios separados un bug en la validación de `Origin` queda contenido porque el navegador igual se niega a mandar la cookie cross-site — **falla seguro**; con un solo dominio ese mismo bug deja a una app escrita por un LLM actuando con la sesión del owner, saltándose el HITL — **falla abierto**. Además nunca arregla la reputación en Safe Browsing sobre el dominio del portafolio ni el aislamiento entre previews. El owner compró `jinserver.com`. Se descartó también la variante path-based (`sandbox.jeanfranck.com/<slug>`), que es estrictamente peor: el origen del navegador es esquema+host+puerto y **no** incluye el path, así que todas las previews compartirían un solo origen (service worker de una secuestra a todas, `localStorage` y DOM compartidos).
+- **2026-07-31 — El dominio sandbox lleva la marca en el nombre, y se acepta el trade-off.** El patrón canónico (`githubusercontent.com`) usa un nombre deliberadamente no alineado con la marca para no transferirle confianza. `jinserver.com` sí la lleva, lo que debilita solo la dimensión *social* (alguien podría asumir que una preview es contenido oficial); la protección técnica queda intacta al 100% porque sigue siendo un dominio registrable distinto. Se compensa manteniendo la raíz sin contenido y sin branding de Jin ni enlaces de vuelta al panel en las previews. A cambio se gana claridad operativa: dentro de un año se sabrá para qué es y no se dejará vencer por error.
 - **2026-07-25 — Fase 4.3: proveedor de embeddings de la memoria — OpenAI `text-embedding-3-large`, no Voyage AI.** BLUEPRINT §6.4 menciona ambas opciones para el corpus en pgvector (no construido todavía), pero no especifica nada para la memoria sqlite-vec — no había ninguna API key de ninguno de los dos en el proyecto. Se le presentaron 3 opciones al owner: reusar Gemini (`GEMINI_API_KEY` ya configurada, cero vendor nuevo), OpenAI, o Voyage AI. Eligió OpenAI explícitamente pese al costo de integración de un vendor nuevo (`OPENAI_API_KEY` nueva, SDK `openai` nuevo) — no la opción de menor fricción. Truncado a 1024 dimensiones (balance calidad/tamaño para un store ≤100k vectores). Vive en `src/memory/embedding-provider.ts`, no en `src/model-provider/` (esa capacidad es TaskProfile/chat-completion con budget guard; embeddings es aparte, sin riesgo "runaway").
 
 ## Plan aprobado
 
 0. **Paso previo** — ✅ hecho.
-1. **Fase 1.1** [rol Antigravity, ejecuta Claude Code] — ✅ hecho, PR #1 Yormun_Infra.
-2. **Fase 1.2** [Claude Code] — ✅ hecho, PR #2 Yormun_Infra.
+1. **Fase 1.1** [rol Antigravity, ejecuta Claude Code] — ✅ hecho, PR #1 Jin_Infra.
+2. **Fase 1.2** [Claude Code] — ✅ hecho, PR #2 Jin_Infra.
 3. **Fase 2.1** [rol Antigravity, ejecuta Claude Code] — ✅ hecho, PR #1 en los 4 repos de app.
-4. **Fase 2.2** [Claude Code] — ✅ hecho, PR #2 Yormun_Core (HITL classifier + audit log). CI verde.
-5. **Fase 2.3** [Claude Code] — ✅ hecho, PR #2 Yormun_Executor (RBAC + ejecución aislada). CI verde, mergeado.
-6. **Fase 3.1** [Antigravity] — ✅ hecho, PR #4 Yormun_Core (Canvas LMS + Shadowing Académico). Prerequisitos (`security`/`model-provider`) en PR #3, Claude Code.
-7. **Fase 2.4** [Antigravity] — ✅ hecho, PR #5 Yormun_Core (bot de Telegram).
-8. **Fase 4.1** [Claude Code] — ✅ hecho, PR #6 Yormun_Core (Budget guard + kill switch).
-9. **Fase 4.2** [Antigravity] — ✅ hecho, PR #9 Yormun_Core (Google Calendar + Gmail). Prerequisitos en PR #7 (tools de Calendar en registry.ts) y PR #8 (`ToolExecutorRegistry`/`ApprovalExecutionService`), ambos Claude Code. `canvasScheduleStudyBlock` desbloqueado.
-10. **Fase 4.3** [Claude Code] — ✅ hecho, PR #10 Yormun_Core (Memoria extendida del agente con sqlite-vec). Ver sección dedicada abajo.
+4. **Fase 2.2** [Claude Code] — ✅ hecho, PR #2 Jin_Core (HITL classifier + audit log). CI verde.
+5. **Fase 2.3** [Claude Code] — ✅ hecho, PR #2 Jin_Executor (RBAC + ejecución aislada). CI verde, mergeado.
+6. **Fase 3.1** [Antigravity] — ✅ hecho, PR #4 Jin_Core (Canvas LMS + Shadowing Académico). Prerequisitos (`security`/`model-provider`) en PR #3, Claude Code.
+7. **Fase 2.4** [Antigravity] — ✅ hecho, PR #5 Jin_Core (bot de Telegram).
+8. **Fase 4.1** [Claude Code] — ✅ hecho, PR #6 Jin_Core (Budget guard + kill switch).
+9. **Fase 4.2** [Antigravity] — ✅ hecho, PR #9 Jin_Core (Google Calendar + Gmail). Prerequisitos en PR #7 (tools de Calendar en registry.ts) y PR #8 (`ToolExecutorRegistry`/`ApprovalExecutionService`), ambos Claude Code. `canvasScheduleStudyBlock` desbloqueado.
+10. **Fase 4.3** [Claude Code] — ✅ hecho, PR #10 Jin_Core (Memoria extendida del agente con sqlite-vec). Ver sección dedicada abajo.
 
 **Fin de la Fase 2, Fase 3.1, Fase 4.1, Fase 4.2 y Fase 4.3 del roadmap.**
 
 **Roadmap extendido (2026-07-25, prompts ya escritos en `docs/PROMPTS.md` — Fase 5+):** el owner pidió planificar el cierre completo del proyecto. Los prompts nuevos asumen las desviaciones reales ya decididas (sin BullMQ, sin Alertmanager, mecanismo aprobar→ejecutar del PR #8) — leer el bloque "Contexto de realidad del código" en PROMPTS.md antes de usarlos:
 
-11. **Fase 5.1** [Claude Code] — ✅ hecho, PR #11 Yormun_Core (Agent loop con tool-calling + plan-and-solve + self-correction). Ver sección dedicada abajo. **Era el prerequisito de todo lo demás** — ya desbloqueado.
-12. **Fase 5.2** [Claude Code] — ✅ hecho, [Yormun_Executor PR #3](https://github.com/JFrnck/Yormun_Executor/pull/3) + [Yormun_Core PR #12](https://github.com/JFrnck/Yormun_Core/pull/12) (`runCode` end-to-end + Modal real). Ver sección dedicada abajo.
+11. **Fase 5.1** [Claude Code] — ✅ hecho, PR #11 Jin_Core (Agent loop con tool-calling + plan-and-solve + self-correction). Ver sección dedicada abajo. **Era el prerequisito de todo lo demás** — ya desbloqueado.
+12. **Fase 5.2** [Claude Code] — ✅ hecho, [Jin_Executor PR #3](https://github.com/JFrnck/Jin_Executor/pull/3) + [Jin_Core PR #12](https://github.com/JFrnck/Jin_Core/pull/12) (`runCode` end-to-end + Modal real). Ver sección dedicada abajo.
 13. **Fase 5.3** [Antigravity] — Sesiones reales en Telegram: agent loop + memoria (`src/telegram/**`). Desbloqueado, sin arrancar.
 14. **Fase 5.4** [Claude Code] — Orquestación multi-agente: sub-agentes coordinados vía task ledger estilo Jira persistido en Postgres (`src/agent/`, requiere ADR nuevo). Desbloqueado, sin arrancar.
-15. **Fase 5.5** [Claude Code] — Pods de servicio: preview apps con puertos expuestos (`npm run dev`, backends) bajo `*.yormungander.com` con TTL (Yormun_Executor + Core + Infra, requiere ADR). **Desbloqueado ahora que 5.2 está hecho**, sin arrancar.
-16. **Fase 6.1** [Claude Code] — Auth JWT single-user + API REST/WebSocket para interfaces (Yormun_Core).
-17. **Fase 6.2** [Antigravity] — Web Dashboard MVP (Yormun_Web — hoy es el template sin tocar).
-18. **Fase 6.3** [Antigravity] — Monaco + Zone Widgets + applets (Yormun_Web).
-19. **Fase 6.4** [Antigravity] — CLI con Ink (Yormun_CLI — hoy es el template sin tocar).
-20. **Fase 7.1** [Antigravity] — Deploy real de las apps + Flux GitOps (Yormun_Infra + Dockerfiles).
+15. **Fase 5.5** [Claude Code] — Pods de servicio: preview apps con puertos expuestos (`npm run dev`, backends) bajo `*.jinserver.com` con TTL (Jin_Executor + Core + Infra, requiere ADR). **Desbloqueado ahora que 5.2 está hecho**, sin arrancar.
+16. **Fase 6.1** [Claude Code] — Auth JWT single-user + API REST/WebSocket para interfaces (Jin_Core).
+17. **Fase 6.2** [Antigravity] — Web Dashboard MVP (Jin_Web — hoy es el template sin tocar).
+18. **Fase 6.3** [Antigravity] — Monaco + Zone Widgets + applets (Jin_Web).
+19. **Fase 6.4** [Antigravity] — CLI con Ink (Jin_CLI — hoy es el template sin tocar).
+20. **Fase 7.1** [Antigravity] — Deploy real de las apps + Flux GitOps (Jin_Infra + Dockerfiles).
 21. **Fase 7.2** [Claude Code] — Runbook de activación real (secretos reales, OAuth consent, webhook Telegram, smoke test E2E).
 22. **Fase 7.3** [Claude Code] — Hardening: auditoría de seguridad completa, chaos tests, MCP servers.
 
@@ -176,7 +180,7 @@ Dependencias: 5.1 → (5.2, 5.3, 5.4) → 5.5 (tras 5.2) → 6.1 → (6.2, 6.3, 
 
 - Ejecución real del bootstrap en la VM OCI la hace el owner (Claude Code solo escribe manifests/scripts).
 
-## Fase 5.1 — resumen técnico (Yormun_Core PR #11, mergeado 2026-07-25)
+## Fase 5.1 — resumen técnico (Jin_Core PR #11, mergeado 2026-07-25)
 
 `src/agent/` (BLUEPRINT §6, requisito del owner 2026-07-25: ejecución autónoma orientada a objetivos), área de Claude Code. El agent loop: el LLM ahora puede invocar tools de verdad, con plan-and-solve (2 meta-tools `declarePlan`/`updatePlanStep`, manejadas inline, nunca pasan por HITL) y self-correction (cap de fallos consecutivos por tool+args exactos, no por paso del plan).
 
@@ -186,21 +190,21 @@ Dependencias: 5.1 → (5.2, 5.3, 5.4) → 5.5 (tras 5.2) → 6.1 → (6.2, 6.3, 
 
 **Fuera de alcance, documentado:** el plan es transient (no persiste en Postgres — eso es el ledger de Fase 5.4), no hay multi-agente, y no está conectado a Telegram todavía (Fase 5.3).
 
-## Fase 5.2 — resumen técnico (Yormun_Executor PR #3 + Yormun_Core PR #12, mergeados 2026-07-25)
+## Fase 5.2 — resumen técnico (Jin_Executor PR #3 + Jin_Core PR #12, mergeados 2026-07-25)
 
 `runCode` cierra el círculo de BLUEPRINT §4: el agent loop (Fase 5.1) ya puede invocar código real, aislado, con el owner aprobando por Telegram.
 
 **Decisión de diseño clave:** la decisión remoto (Modal) vs. local (pod Deno) ya no es un booleano `remote` que decide el caller (placeholder sin lógica real desde Fase 2.3) — es automática por el Executor según `language: 'typescript' | 'python'` (BLUEPRINT 4.5 lo pide explícito). El tier local es Deno puro, no puede correr Python en absoluto, así que "necesita Python" ya implica "necesita Modal" de forma determinística, sin heurísticas de inspeccionar el código.
 
-**`Yormun_Executor` (PR #3):** `ModalService` real con el SDK oficial `modal@0.9.0` — resuelve `App`/imagen de datos científicos (`pandas`/`numpy`) de forma LAZY (cacheada en el primer `runRemote()` real, no en `onModuleInit()` — evita repetir el error de `GoogleOAuthService` en Fase 4.2, que sí escribía a DB de forma eager y rompía `test:e2e`). Sandbox con `blockNetwork`/`outboundDomainAllowlist` según `egressWhitelist` de la tool, límites duros separados del tier local (`remoteMaxTimeoutSeconds: 1800`, `remoteMemoryLimitMiB: 4096` para `runCode`, vs. `maxTimeoutSeconds: 300` local). Egreso: a diferencia del tier local (K3s/Flannel no resuelve dominio→CIDR, ADR 0003 punto 2), la Sandbox API de Modal acepta dominios directos — asimetría documentada en el código para cuando exista una tool con egreso real.
+**`Jin_Executor` (PR #3):** `ModalService` real con el SDK oficial `modal@0.9.0` — resuelve `App`/imagen de datos científicos (`pandas`/`numpy`) de forma LAZY (cacheada en el primer `runRemote()` real, no en `onModuleInit()` — evita repetir el error de `GoogleOAuthService` en Fase 4.2, que sí escribía a DB de forma eager y rompía `test:e2e`). Sandbox con `blockNetwork`/`outboundDomainAllowlist` según `egressWhitelist` de la tool, límites duros separados del tier local (`remoteMaxTimeoutSeconds: 1800`, `remoteMemoryLimitMiB: 4096` para `runCode`, vs. `maxTimeoutSeconds: 300` local). Egreso: a diferencia del tier local (K3s/Flannel no resuelve dominio→CIDR, ADR 0003 punto 2), la Sandbox API de Modal acepta dominios directos — asimetría documentada en el código para cuando exista una tool con egreso real.
 
-**`Yormun_Core` (PR #12):** tool `runCode` declarada en `registry.ts` (`hitlLevel: 'confirm'`) con `inputSchema: {code, language}` — deliberadamente **sin** `env`, defensa en profundidad para que el LLM nunca pueda inyectar variables de entorno arbitrarias al pod/sandbox. Nuevo `src/executor-client/` (área propia de Claude Code, atada a `src/hitl/`, no a `src/integrations/**`): `ExecutorClientService` (HTTP client, `EXECUTOR_BASE_URL` requerida fail-fast) + `ExecutorClientModule` que registra el ejecutor de `runCode` en `ToolExecutorRegistry` al bootstrapear — mismo patrón que `GoogleModule` (Fase 4.2). `env` siempre se envía `{}` al Executor.
+**`Jin_Core` (PR #12):** tool `runCode` declarada en `registry.ts` (`hitlLevel: 'confirm'`) con `inputSchema: {code, language}` — deliberadamente **sin** `env`, defensa en profundidad para que el LLM nunca pueda inyectar variables de entorno arbitrarias al pod/sandbox. Nuevo `src/executor-client/` (área propia de Claude Code, atada a `src/hitl/`, no a `src/integrations/**`): `ExecutorClientService` (HTTP client, `EXECUTOR_BASE_URL` requerida fail-fast) + `ExecutorClientModule` que registra el ejecutor de `runCode` en `ToolExecutorRegistry` al bootstrapear — mismo patrón que `GoogleModule` (Fase 4.2). `env` siempre se envía `{}` al Executor.
 
 **Criterio de éxito cerrado:** turno del agente "analiza este CSV con pandas" → LLM invoca `runCode({code, language: 'python'})` → clasifica `confirm` → pending approval → owner aprueba por Telegram → `ApprovalExecutionService` → `ToolExecutorRegistry` → `ExecutorClientService` → Executor real → Modal → resultado (stdout/stderr) sanitizado con `wrapUntrustedContent` (ya lo hace el agent loop para todo resultado de tool, Fase 5.1) vuelve al chat.
 
 **Fuera de alcance, documentado:** `runCode` con TypeScript local ya funcionaba desde Fase 2.3 (pod Deno) — esta fase solo conecta a Core y agrega el tier Modal. No hay preview services de larga vida todavía (eso es Fase 5.5, ahora desbloqueada).
 
-## Fase 4.3 — resumen técnico (Yormun_Core PR #10, mergeado 2026-07-25)
+## Fase 4.3 — resumen técnico (Jin_Core PR #10, mergeado 2026-07-25)
 
 `src/memory/` (BLUEPRINT §3.3.1, PROMPTS.md §4.3), área exclusiva de Claude Code:
 
@@ -238,7 +242,7 @@ Claude Code revisó el plan de Antigravity para `src/integrations/google/` (adem
 
 Lo que el plan sí acierta: consumo correcto de `wrapUntrustedContent` para el contenido de emails/eventos, reuso de las tools ya declaradas en `registry.ts` sin tocarlo, y el diseño de OAuth2 con refresh token vía Infisical (no en env plano) es correcto.
 
-## Fase 4.2 — decisiones y prerequisitos (Yormun_Core PR #7)
+## Fase 4.2 — decisiones y prerequisitos (Jin_Core PR #7)
 
 Antes de que Antigravity implemente `src/integrations/google/`, se resolvieron 2 cosas que `PROMPTS.md` §4.2 no cubre o contradice:
 
@@ -260,11 +264,11 @@ Al revisar el plan de Antigravity se encontró que **no existe ningún mecanismo
 
 **Handoff a Antigravity:** `sendEmail` y `deleteCalendarEventFuture` (los 2 tools `confirm`/`dual-confirm` reales de esta fase) deben, en el `onModuleInit()` de su propio módulo de Google, llamar `toolExecutorRegistry.register('sendEmail', async (payload) => {...})` con la lógica real de envío/borrado. El handler de la tool, en vez de ejecutar directo, llama `classifyToolCall` y si no es `auto`, crea la pending approval con `dualConfirmService.createPendingApproval({ ..., payload })` (el payload con to/subject/body o eventId) y devuelve "en espera de aprobación" — no ejecuta nada hasta que `ApprovalExecutionService` lo resuelva desde Telegram.
 
-## Fase 2.3 (follow-up) — RBAC de NetworkPolicy en Yormun_Infra (PR #4)
+## Fase 2.3 (follow-up) — RBAC de NetworkPolicy en Jin_Infra (PR #4)
 
-Cierra ADR 0003 punto 3. `k8s/base/executor/`: `ServiceAccount` `executor` en `yormun-executor`, `Role` `executor-agents-sandbox` en `agents-sandbox` (`create/get/list/delete` de Pods per BLUEPRINT 4.2 + `create/delete` de NetworkPolicies, la extensión que ADR 0003 identificó como necesaria), `RoleBinding` conectando ambos across namespaces. Sin acceso a Secrets/ConfigMaps/Deployments/otros namespaces. Verificado con `kubectl kustomize k8s/base` + CI verde (lint manifests, shellcheck, bats, GitGuardian).
+Cierra ADR 0003 punto 3. `k8s/base/executor/`: `ServiceAccount` `executor` en `jin-executor`, `Role` `executor-agents-sandbox` en `agents-sandbox` (`create/get/list/delete` de Pods per BLUEPRINT 4.2 + `create/delete` de NetworkPolicies, la extensión que ADR 0003 identificó como necesaria), `RoleBinding` conectando ambos across namespaces. Sin acceso a Secrets/ConfigMaps/Deployments/otros namespaces. Verificado con `kubectl kustomize k8s/base` + CI verde (lint manifests, shellcheck, bats, GitGuardian).
 
-## Fase 2.3 — resumen técnico (Yormun_Executor PR #2)
+## Fase 2.3 — resumen técnico (Jin_Executor PR #2)
 
 Implementado según ADR 0003 (separación de privilegios + hallazgo de seguridad `deno eval`):
 
@@ -273,10 +277,10 @@ Implementado según ADR 0003 (separación de privilegios + hallazgo de seguridad
 - **Hallazgo de seguridad real:** verificado contra Deno 2.9.3 real que `deno eval` tiene *"implicit access to all permissions"* — ignora `--allow-net` completamente. Corregido a `deno run` + código como `data:` URL en base64 (sin ConfigMap, sin shell).
 - `src/pod-lifecycle/` — ciclo de vida bajo demanda, sin warm pool, siempre destruye el pod.
 - `src/modal/` — stub explícito (501) para `remote: true`, Fase 5.
-- **Tests:** 30 unitarios + 5 e2e (capa HTTP completa sin K8s real) + 2 de integración con **K3s real** (`@testcontainers/k3s`): camino feliz de ejecución, y el test de aislamiento de red real que pide PROMPTS.md (un pod en `agents-sandbox` con permiso de red de Deno explícito igual no alcanza un servicio en `yormun`, bloqueado por la NetworkPolicy real).
+- **Tests:** 30 unitarios + 5 e2e (capa HTTP completa sin K8s real) + 2 de integración con **K3s real** (`@testcontainers/k3s`): camino feliz de ejecución, y el test de aislamiento de red real que pide PROMPTS.md (un pod en `agents-sandbox` con permiso de red de Deno explícito igual no alcanza un servicio en `jin`, bloqueado por la NetworkPolicy real).
 - **Fix incidental:** `app.controller.ts` (heredado de Fase 2.1) tenía un endpoint stub `@Post('execute')` que colisionaba de ruta con el `ExecuteController` real — toda petición a `/execute` devolvía 201 del stub, saltándose RBAC/Zod por completo. Corregido.
 
-## Fase 2.2 — resumen técnico (Yormun_Core PR #2)
+## Fase 2.2 — resumen técnico (Jin_Core PR #2)
 
 Implementado según ADR 0001 (4 niveles HITL) y ADR 0002 (`request_id` + `pending_approvals`):
 
@@ -287,7 +291,7 @@ Implementado según ADR 0001 (4 niveles HITL) y ADR 0002 (`request_id` + `pendin
 - **Tests:** 36 unitarios (100% matriz tool×nivel, 4 tests de mutación del hash chain) + 18 de integración con testcontainers (Postgres real) + 1 e2e.
 - **Gap de cobertura documentado:** `timeout.service.ts` en ~70% — los caminos 'escalate'/'abandon' no tienen integration test porque ninguna tool registrada usa `timeoutBehavior: 'escalate'` todavía (llega con Canvas, Fase 3).
 
-## CI de Yormun_Core / Yormun_Executor: bugs encontrados y corregidos (2026-07-21)
+## CI de Jin_Core / Jin_Executor: bugs encontrados y corregidos (2026-07-21)
 
 El owner reportó que el CI de ambos repos falló al pushear la Fase 2.1. Investigación encontró **cuatro problemas reales**, todos corregidos:
 
@@ -302,22 +306,22 @@ También corregido de paso: glob patterns rotos en `lint`/`format`, y `package.j
 
 ## Recientemente completado (últimos 7 días)
 
-- 2026-07-25: [Yormun_Executor] [PR #3](https://github.com/JFrnck/Yormun_Executor/pull/3) mergeado + [Yormun_Core] [PR #12](https://github.com/JFrnck/Yormun_Core/pull/12) mergeado — Fase 5.2 completa en ambos repos: `ModalService` real (SDK `modal@0.9.0`, sandbox Python/pandas con imagen cacheada de forma lazy), ruteo local/remoto automático por `language` (reemplaza el `remote: boolean` placeholder de Fase 2.3), tool `runCode` declarada en `registry.ts` (confirm, sin `env` expuesto al LLM) y `src/executor-client/` nuevo conectando el agent loop al Executor real. 51 tests nuevos entre ambos repos (42 unitarios + 2 integración K3s real + 5 e2e en Executor; 258 unitarios + 43 integración Postgres real + 1 e2e en Core tras el merge), CI verde verificado con `gh pr checks` en ambos. Ver sección dedicada abajo.
-- 2026-07-24: [Yormun_Core] [PR #7](https://github.com/JFrnck/Yormun_Core/pull/7) mergeado — prerequisito de Fase 4.2: 4 tools de Calendar declaradas en `registry.ts` (`listCalendarEvents` auto, `updateCalendarEvent` notify, `deleteCalendarEventPast` notify, `deleteCalendarEventFuture` confirm). Matriz HITL actualizada a 10 tools, 100% cobertura.
-- 2026-07-24: [Yormun_Core] [PR #6](https://github.com/JFrnck/Yormun_Core/pull/6) mergeado — Fase 4.1 completa: `src/budget/` (tracking sesión/día, degradación al 80% vía el hint `budgetRemaining` de Fase 3.1, kill switch de runaway persistido en Postgres), métricas Prometheus, `BudgetGuardedModelRouter` ya inyectado en Canvas y Telegram, `/budget` con datos reales y `/unpause` nuevo en el bot. 87 tests nuevos (unitarios + integración Postgres real), CI verde, verificado con `tsc --noEmit -p tsconfig.json` de forma independiente antes de mergear.
-- 2026-07-24: [Yormun_Core] [PR #5](https://github.com/JFrnck/Yormun_Core/pull/5) mergeado — Fase 2.4 completa: bot de Telegram con grammY en modo webhook, auth estricta con `TELEGRAM_OWNER_CHAT_ID` numérico, `TELEGRAM_WEBHOOK_SECRET` requerida fail-fast validando el header de Telegram, `bot.init()` real, comandos `/start`/`/status`/`/tasks`/`/approve`/`/reject`/`/budget` (stub honesto), integración con `DualConfirmService`/`AuditService`/`ModelRouterService`. 3 rondas de review contra el código real (bug de tipos chat_id, gap de seguridad del webhook, `botInfo` hardcodeado, tipos en specs invisibles a `pnpm build`), todas resueltas y verificadas independientemente antes de mergear. 105 tests en verde.
-- 2026-07-23: [Yormun_Core] [PR #4](https://github.com/JFrnck/Yormun_Core/pull/4) mergeado — Fase 3.1 completada por Antigravity (integración Canvas LMS, cliente REST con rate limit de 30 req/min, handlers sanitizados con `wrapUntrustedContent`, ShadowingService nocturno consumiendo `ModelRouterService.complete('long_context', ...)` con Gemini 3.1 Pro, `CalendarNotImplementedError` 501). 95 tests en verde. Claude Code verificó de forma independiente (lint/test/build/typecheck a mano, no solo el self-report) antes de mergear — sin hallazgos nuevos.
-- 2026-07-23: [Yormun_Core] PR #3 mergeado — prerequisitos de Fase 3.1: `src/security/injection-sanitizer.ts` (ADR 0004) + `src/model-provider/**` (router, failover, providers Anthropic/Google, config/models.yaml) + declaración de las 3 tools de Canvas en `registry.ts`. 87 tests, cobertura 97% en los módulos nuevos. Fix incidental de CI (env vars faltantes). Antigravity desbloqueado para retomar `integrations/canvas/**`.
-- 2026-07-23: [Yormun_Infra] PR #4 mergeado — RBAC de NetworkPolicy para el ServiceAccount del Executor (ADR 0003 punto 3), cerrando el último follow-up técnico de la Fase 2.
-- 2026-07-23: Review y merge de los 8 PRs de las Fases 1-2 en los 6 repos. Incidente: Yormun_Infra #2 auto-cerrado por GitHub al borrar la rama base de un PR apilado; recuperado como #3. Procedimiento corregido aplicado sin incidentes en Core y Executor. Todos los repos en `main` limpio, 0 PRs abiertos.
-- 2026-07-22: [Yormun_Executor] Fase 2.3 completa (RBAC + ejecución aislada con K3s real). PR #2 abierto. 30 unitarios + 5 e2e + 2 de integración (K3s real vía testcontainers).
-- 2026-07-22: [Yormun_Docs] ADR 0003 (Executor: separación + hallazgo `deno eval`) escrito.
-- 2026-07-21: [Yormun_Core] Fase 2.2 completa (HITL classifier + audit log + Drizzle + config module). PR #2 abierto, CI verde.
-- 2026-07-21: [Yormun_Docs] ADR 0001 (4 niveles HITL) y ADR 0002 (`request_id`/`pending_approvals`) escritos; BLUEPRINT 9.5 corregido.
-- 2026-07-21: [Yormun_Core, Yormun_Executor] Migración Jest→Vitest + fix de CI + fix de node_modules/dist trackeados + fix de bug de DI en Executor + reactivación de `no-explicit-any` + fix de globs de lint/format + rename de `package.json`.
+- 2026-07-25: [Jin_Executor] [PR #3](https://github.com/JFrnck/Jin_Executor/pull/3) mergeado + [Jin_Core] [PR #12](https://github.com/JFrnck/Jin_Core/pull/12) mergeado — Fase 5.2 completa en ambos repos: `ModalService` real (SDK `modal@0.9.0`, sandbox Python/pandas con imagen cacheada de forma lazy), ruteo local/remoto automático por `language` (reemplaza el `remote: boolean` placeholder de Fase 2.3), tool `runCode` declarada en `registry.ts` (confirm, sin `env` expuesto al LLM) y `src/executor-client/` nuevo conectando el agent loop al Executor real. 51 tests nuevos entre ambos repos (42 unitarios + 2 integración K3s real + 5 e2e en Executor; 258 unitarios + 43 integración Postgres real + 1 e2e en Core tras el merge), CI verde verificado con `gh pr checks` en ambos. Ver sección dedicada abajo.
+- 2026-07-24: [Jin_Core] [PR #7](https://github.com/JFrnck/Jin_Core/pull/7) mergeado — prerequisito de Fase 4.2: 4 tools de Calendar declaradas en `registry.ts` (`listCalendarEvents` auto, `updateCalendarEvent` notify, `deleteCalendarEventPast` notify, `deleteCalendarEventFuture` confirm). Matriz HITL actualizada a 10 tools, 100% cobertura.
+- 2026-07-24: [Jin_Core] [PR #6](https://github.com/JFrnck/Jin_Core/pull/6) mergeado — Fase 4.1 completa: `src/budget/` (tracking sesión/día, degradación al 80% vía el hint `budgetRemaining` de Fase 3.1, kill switch de runaway persistido en Postgres), métricas Prometheus, `BudgetGuardedModelRouter` ya inyectado en Canvas y Telegram, `/budget` con datos reales y `/unpause` nuevo en el bot. 87 tests nuevos (unitarios + integración Postgres real), CI verde, verificado con `tsc --noEmit -p tsconfig.json` de forma independiente antes de mergear.
+- 2026-07-24: [Jin_Core] [PR #5](https://github.com/JFrnck/Jin_Core/pull/5) mergeado — Fase 2.4 completa: bot de Telegram con grammY en modo webhook, auth estricta con `TELEGRAM_OWNER_CHAT_ID` numérico, `TELEGRAM_WEBHOOK_SECRET` requerida fail-fast validando el header de Telegram, `bot.init()` real, comandos `/start`/`/status`/`/tasks`/`/approve`/`/reject`/`/budget` (stub honesto), integración con `DualConfirmService`/`AuditService`/`ModelRouterService`. 3 rondas de review contra el código real (bug de tipos chat_id, gap de seguridad del webhook, `botInfo` hardcodeado, tipos en specs invisibles a `pnpm build`), todas resueltas y verificadas independientemente antes de mergear. 105 tests en verde.
+- 2026-07-23: [Jin_Core] [PR #4](https://github.com/JFrnck/Jin_Core/pull/4) mergeado — Fase 3.1 completada por Antigravity (integración Canvas LMS, cliente REST con rate limit de 30 req/min, handlers sanitizados con `wrapUntrustedContent`, ShadowingService nocturno consumiendo `ModelRouterService.complete('long_context', ...)` con Gemini 3.1 Pro, `CalendarNotImplementedError` 501). 95 tests en verde. Claude Code verificó de forma independiente (lint/test/build/typecheck a mano, no solo el self-report) antes de mergear — sin hallazgos nuevos.
+- 2026-07-23: [Jin_Core] PR #3 mergeado — prerequisitos de Fase 3.1: `src/security/injection-sanitizer.ts` (ADR 0004) + `src/model-provider/**` (router, failover, providers Anthropic/Google, config/models.yaml) + declaración de las 3 tools de Canvas en `registry.ts`. 87 tests, cobertura 97% en los módulos nuevos. Fix incidental de CI (env vars faltantes). Antigravity desbloqueado para retomar `integrations/canvas/**`.
+- 2026-07-23: [Jin_Infra] PR #4 mergeado — RBAC de NetworkPolicy para el ServiceAccount del Executor (ADR 0003 punto 3), cerrando el último follow-up técnico de la Fase 2.
+- 2026-07-23: Review y merge de los 8 PRs de las Fases 1-2 en los 6 repos. Incidente: Jin_Infra #2 auto-cerrado por GitHub al borrar la rama base de un PR apilado; recuperado como #3. Procedimiento corregido aplicado sin incidentes en Core y Executor. Todos los repos en `main` limpio, 0 PRs abiertos.
+- 2026-07-22: [Jin_Executor] Fase 2.3 completa (RBAC + ejecución aislada con K3s real). PR #2 abierto. 30 unitarios + 5 e2e + 2 de integración (K3s real vía testcontainers).
+- 2026-07-22: [Jin_Docs] ADR 0003 (Executor: separación + hallazgo `deno eval`) escrito.
+- 2026-07-21: [Jin_Core] Fase 2.2 completa (HITL classifier + audit log + Drizzle + config module). PR #2 abierto, CI verde.
+- 2026-07-21: [Jin_Docs] ADR 0001 (4 niveles HITL) y ADR 0002 (`request_id`/`pending_approvals`) escritos; BLUEPRINT 9.5 corregido.
+- 2026-07-21: [Jin_Core, Jin_Executor] Migración Jest→Vitest + fix de CI + fix de node_modules/dist trackeados + fix de bug de DI en Executor + reactivación de `no-explicit-any` + fix de globs de lint/format + rename de `package.json`.
 - 2026-07-21: PRs abiertos en los 4 repos de app para la Fase 2.1.
-- 2026-07-21: [Yormun_Infra] PR #2 abierto (Fase 1.2, backups).
-- 2026-07-20: [Yormun_Infra] Fase 1.1 (infra base) terminada; PR #1 abierto.
-- 2026-07-20: [Yormun_Core, Yormun_Executor, Yormun_Web, Yormun_CLI] Fase 2.1 completada por Antigravity (scaffolding base de apps y CI pipelines), commiteada en local.
-- 2026-07-19: [Yormun_Docs] Bundle de documentación inicial commiteado (`main`).
+- 2026-07-21: [Jin_Infra] PR #2 abierto (Fase 1.2, backups).
+- 2026-07-20: [Jin_Infra] Fase 1.1 (infra base) terminada; PR #1 abierto.
+- 2026-07-20: [Jin_Core, Jin_Executor, Jin_Web, Jin_CLI] Fase 2.1 completada por Antigravity (scaffolding base de apps y CI pipelines), commiteada en local.
+- 2026-07-19: [Jin_Docs] Bundle de documentación inicial commiteado (`main`).
 - 2026-07-19: [todos los repos] Repos creados con README inicial; stubs AGENTS.md/CLAUDE.md colocados.

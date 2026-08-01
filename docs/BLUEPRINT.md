@@ -1,6 +1,6 @@
-# YORMUNGANDER — Blueprint maestro
+# Jin — Blueprint maestro
 
-> **Sistema operativo personal + orquestador de agentes.** Alias: **Yormun**.
+> **Sistema operativo personal + orquestador de agentes.**
 > Único usuario (owner), self-hosted en Oracle Cloud Free Tier, escalado externo a Modal cuando la VM se queda corta.
 > Este documento es la fuente de verdad. Cuando cualquier decisión de código entre en conflicto con él, gana el blueprint. Si el blueprint está mal, se actualiza primero — nunca se ignora.
 > Ver `ANALISIS.md` para el razonamiento del refinamiento 2026-07 (multi-repo, dominios, sqlite-vec, pods bajo demanda).
@@ -43,13 +43,13 @@ Cuatro capas, comunicándose siempre en la dirección declarada:
                              ▼ REST / WebSocket
 ┌──────────────────────────────────────────────────────────────┐
 │  ORQUESTACIÓN (OCI VM)                                        │
-│  yormun-core (NestJS) · BullMQ+Redis                          │
+│  jin-core (NestJS) · BullMQ+Redis                             │
 │  Postgres+pgvector · sqlite-vec (memoria) · Infisical         │
 └────────────┬──────────────────────────────┬──────────────────┘
              ▼ HTTP interno                 ▼ SDK
 ┌───────────────────────────┐   ┌──────────────────────────────┐
 │  EJECUCIÓN LOCAL          │   │  ESCALADO EXTERNO            │
-│  yormun-executor +        │   │  Modal Sandbox (gVisor)      │
+│  jin-executor +           │   │  Modal Sandbox (gVisor)      │
 │  pods Deno bajo demanda   │   │                              │
 └───────────────────────────┘   └──────────────────────────────┘
              ▼                                 ▼
@@ -58,9 +58,9 @@ Cuatro capas, comunicándose siempre en la dirección declarada:
 └──────────────────────────────────────────────────────────────┘
 ```
 
-**Regla arquitectónica dura:** yormun-core _nunca_ habla con el socket de Docker/K3s directamente. Solo el Executor (microservicio separado con ServiceAccount propia y RBAC restrictivo) puede crear/destruir pods. Esta separación no es negociable — es la única defensa arquitectónica contra que un prompt injection en core escale a "borrar todo el clúster".
+**Regla arquitectónica dura:** jin-core _nunca_ habla con el socket de Docker/K3s directamente. Solo el Executor (microservicio separado con ServiceAccount propia y RBAC restrictivo) puede crear/destruir pods. Esta separación no es negociable — es la única defensa arquitectónica contra que un prompt injection en core escale a "borrar todo el clúster".
 
-**Estructura de código: multi-repo.** Cada app vive en su propio repositorio — `Yormun_Core`, `Yormun_Executor`, `Yormun_Web`, `Yormun_CLI`, `Yormun_Infra`, `Yormun_Docs`, clonados juntos en la carpeta local `Yormun/` — con su CI, sus dependencias y su versión de Node (`.nvmrc`). Los contratos entre repos son OpenAPI generado desde código, no paquetes compartidos. **Convención de nombres:** repos/carpetas en `Yormun_X`; todo nombre runtime de K8s (namespaces, services, imágenes, bucket) en minúscula kebab (`yormun-core`, `yormun-executor`) porque K8s lo exige. Ver sección 4.6 y `AGENTS.md` sección 4.
+**Estructura de código: multi-repo.** Cada app vive en su propio repositorio — `Jin_Core`, `Jin_Executor`, `Jin_Web`, `Jin_CLI`, `Jin_Infra`, `Jin_Docs`, clonados juntos en la carpeta local `Jin/` — con su CI, sus dependencias y su versión de Node (`.nvmrc`). Los contratos entre repos son OpenAPI generado desde código, no paquetes compartidos. **Convención de nombres:** repos/carpetas en `Jin_X`; todo nombre runtime de K8s (namespaces, services, imágenes, bucket) en minúscula kebab (`jin-core`, `jin-executor`) porque K8s lo exige. Ver sección 4.6 y `AGENTS.md` sección 4.
 
 ---
 
@@ -82,8 +82,8 @@ Total disponible tras reservar SO/K3s: **20 GB RAM, 3.5 vCPU**.
 | Postgres (con pgvector) | 4 Gi           | 6 Gi           | 500m           | 1500m           |
 | Redis                   | 512 Mi         | 1 Gi           | 100m           | 500m            |
 | Infisical               | 256 Mi         | 512 Mi         | 50m            | 200m            |
-| yormun-core (1 réplica) | 512 Mi         | 1 Gi           | 200m           | 800m            |
-| yormun-executor         | 256 Mi         | 512 Mi         | 100m           | 400m            |
+| jin-core (1 réplica) | 512 Mi         | 1 Gi           | 200m           | 800m            |
+| jin-executor         | 256 Mi         | 512 Mi         | 100m           | 400m            |
 | Traefik                 | 128 Mi         | 256 Mi         | 50m            | 200m            |
 | cloudflared             | 64 Mi          | 128 Mi         | 50m            | 100m            |
 | Prometheus              | 512 Mi         | 1 Gi           | 100m           | 300m            |
@@ -95,7 +95,7 @@ Total disponible tras reservar SO/K3s: **20 GB RAM, 3.5 vCPU**.
 
 Los pods efímeros consumen del pool `agents-sandbox` mediante ResourceQuota a nivel de namespace, no requests individuales. **La quota es un techo de ráfaga, no una reserva: sin tareas corriendo, el consumo del namespace es cero** (no hay warm pool — ver 4.4).
 
-yormun-core corre con **1 réplica**: para un solo usuario, una segunda réplica siempre encendida es redundancia sin retorno. El rolling update sigue siendo sin downtime vía `maxSurge: 1, maxUnavailable: 0` (ver 12.2).
+jin-core corre con **1 réplica**: para un solo usuario, una segunda réplica siempre encendida es redundancia sin retorno. El rolling update sigue siendo sin downtime vía `maxSurge: 1, maxUnavailable: 0` (ver 12.2).
 
 Ver `AGENTS.md` sección 4.4 para la regla dura de aplicación, y ADR 0002 para el análisis de por qué es obligatorio y no recomendado.
 
@@ -129,8 +129,8 @@ Complementa a pgvector, no lo reemplaza. Frontera:
 
 Diseño:
 
-- Archivo único `memory.db` en el PersistentVolume de yormun-core. Acceso vía `better-sqlite3` + extensión `sqlite-vec`, WAL mode, un solo writer.
-- **Solo yormun-core** (módulo `src/memory/`) lee/escribe. Los pods efímeros jamás lo tocan.
+- Archivo único `memory.db` en el PersistentVolume de jin-core. Acceso vía `better-sqlite3` + extensión `sqlite-vec`, WAL mode, un solo writer.
+- **Solo jin-core** (módulo `src/memory/`) lee/escribe. Los pods efímeros jamás lo tocan.
 - Búsqueda: KNN brute-force + filtros por columnas de metadata (estable en sqlite-vec; sus índices ANN siguen en alpha — no depender de ellos).
 - Metadata mínima por entrada: `tipo`, `fuente`, `fecha`, `modelo_embedding` (permite migrar de modelo de embeddings sin adivinar).
 - Backup: incluido en el cron nocturno (ver 3.5). Restaurable con un `cp`.
@@ -149,7 +149,7 @@ Diseño:
   - `sqlite3 memory.db ".backup"` de la memoria extendida.
   - Snapshot del state de K3s (etcd).
 - Cifrado con `age` usando llave master guardada en Infisical.
-- Subida a Cloudflare R2 (bucket `yormun-backups`).
+- Subida a Cloudflare R2 (bucket `jin-backups`).
 - **Retención:** 7 diarios · 4 semanales · 3 mensuales.
 - **Prueba de restore mensual automatizada:** cron el día 1 de cada mes levanta un contenedor Postgres temporal, aplica el dump más reciente, corre `SELECT COUNT(*)` en tablas críticas, valida, y notifica por Telegram el resultado. **Un backup nunca probado no es un backup.**
 
@@ -163,9 +163,9 @@ Diseño:
 
 ## 4. Orquestación y ejecución aislada
 
-### 4.1 yormun-core (orquestador principal)
+### 4.1 jin-core (orquestador principal)
 
-- Node.js 24 LTS. Repo propio: `Yormun_Core`.
+- Node.js 24 LTS. Repo propio: `Jin_Core`.
 - Corre como Deployment con 1 réplica (rolling update con surge, ver 12.2).
 - Responsabilidades:
   - Auth (single user, JWT firmado con llave en Infisical).
@@ -182,10 +182,10 @@ Diseño:
   - No tiene acceso al socket de Docker/K3s.
   - No corre con `hostNetwork` ni con SecurityContext privilegiado.
 
-### 4.2 yormun-executor (microservicio de ejecución)
+### 4.2 jin-executor (microservicio de ejecución)
 
-- Node.js 24 LTS, servicio separado. Repo propio: `Yormun_Executor`.
-- Corre como Deployment con 1 réplica en el namespace `yormun-executor`.
+- Node.js 24 LTS, servicio separado. Repo propio: `Jin_Executor`.
+- Corre como Deployment con 1 réplica en el namespace `jin-executor`.
 - ServiceAccount propia con Role restrictivo:
   - `create`, `get`, `list`, `delete` de Pods **solo en el namespace `agents-sandbox`**.
   - Nada más. Sin acceso a Secrets, ConfigMaps, Deployments, ni otros namespaces.
@@ -200,8 +200,8 @@ Diseño:
 
 ### 4.3 NetworkPolicies (aislamiento de red)
 
-- Namespace `yormun`: core, Redis, Postgres. Puede recibir de `yormun-frontend`. No puede iniciar tráfico a `agents-sandbox`.
-- Namespace `yormun-executor`: Executor. Recibe solo de `yormun`. Puede crear pods en `agents-sandbox`.
+- Namespace `jin`: core, Redis, Postgres. Puede recibir de `jin-frontend`. No puede iniciar tráfico a `agents-sandbox`.
+- Namespace `jin-executor`: Executor. Recibe solo de `jin`. Puede crear pods en `agents-sandbox`.
 - Namespace `agents-sandbox`: pods efímeros Deno. Solo pueden salir por egresos específicos declarados (URLs whitelisted). No pueden ver otros namespaces.
 
 ### 4.4 Tier local: pods Deno bajo demanda
@@ -225,7 +225,7 @@ Diseño:
 ### 4.6 Contratos entre repos (reemplazo del monorepo)
 
 - **No hay paquetes compartidos.** Los packages `shared-types`, `shared-config` y `shared-audit` del diseño original se disolvieron (ver `ANALISIS.md` sección 3).
-- Yormun_Core y Yormun_Executor generan `contracts/openapi.json` desde su código (`@nestjs/swagger`) en CI.
+- Jin_Core y Jin_Executor generan `contracts/openapi.json` desde su código (`@nestjs/swagger`) en CI.
 - Consumidores generan tipos con `openapi-typescript` (`pnpm generate:api`): web y cli desde el contrato de core; core desde el contrato del executor.
 - **Prohibido copiar tipos a mano entre repos.** Si el contrato cambia, el consumidor regenera y su `tsc` detecta el breaking change.
 - Cambios de API entre repos: retrocompatibles, o en dos pasos (expand → contract).
@@ -240,26 +240,38 @@ Diseño:
 - Expone Traefik a Cloudflare por túnel; la IP de OCI nunca aparece pública.
 - Beneficios extra: DDoS gratis, Access rules como capa adicional (ej. token en móvil para acceder al dashboard).
 
-### 5.2 Los dos dominios y sus roles
+### 5.2 Los dominios y sus roles
 
-| Dominio | Rol | Contenido |
-| --- | --- | --- |
-| **yormun.com** | Núcleo confiable (lo que usa el owner a diario) | `api.yormun.com` (core), `dash.yormun.com` (dashboard, Cloudflare Pages), `grafana.yormun.com` |
-| **yormungander.com** | Zona efímera / no-confiable (lo que generan los agentes) | `app-{uuid}.yormungander.com` (applets), previews, share links. Raíz reservada para uso público futuro. |
+Dos dominios registrables, tres zonas de confianza:
 
-**Regla dura de separación de origen:** contenido generado por agentes (HTML/JS de applets) se sirve **solo** desde `yormungander.com`, jamás desde `yormun.com`. Comparten túnel pero no dominio registrable: cookies de sesión del dashboard y contenido LLM-generado quedan aislados a nivel de site (mismo patrón que `githubusercontent.com`). El dashboard carga applets por iframe cross-origin con `sandbox="allow-scripts"`.
+| Zona | Host | Qué sirve | Confianza |
+| --- | --- | --- | --- |
+| Identidad del owner | `jeanfranck.com` (raíz y paths) | Portafolio personal. **No es parte de Jin** — no se despliega nada del sistema aquí. | Del owner |
+| Núcleo de Jin | `jin.jeanfranck.com` | Dashboard (Cloudflare Pages) + API bajo el path `/api` (ruteada al túnel) | Código revisado |
+| Sandbox | `jinserver.com` | `<slug>.jinserver.com` — previews, applets, share links | **Generado por agentes, sin revisar** |
+
+**La API va como path (`jin.jeanfranck.com/api`), no como subdominio.** Siendo un sistema de un solo usuario, un único origen elimina CORS por completo y permite que la cookie de sesión sea *host-only* (`__Host-` prefix, sin atributo `Domain`) en vez de tener que abrirse a `.jeanfranck.com`. Se implementa con una route rule de Cloudflare: `/api/*` al túnel, el resto a Pages.
+
+**Regla dura de separación de origen:** contenido generado por agentes se sirve **solo** desde `jinserver.com`, jamás desde `jeanfranck.com` ni ninguno de sus subdominios. Comparten túnel pero no dominio registrable, y eso es justamente el punto: el navegador trata el par como *cross-site*, así que la cookie de sesión del dashboard nunca viaja a una petición originada por código que escribió un LLM. Es el mismo patrón que `githubusercontent.com` frente a `github.com`.
+
+El escenario concreto que esto previene: un agente lee un input externo envenenado con una inyección de prompt y genera una app cuyo JS hace `fetch('.../api/tools/sendEmail', {credentials:'include'})`. Con dominios separados el navegador no adjunta la cookie y la petición muere sola, sin depender de que la validación de `Origin` del servidor esté bien escrita. **Falla seguro, no abierto.**
+
+Aunque el dominio sandbox lleve la marca en el nombre, es desechable por diseño: su raíz no sirve nada y las previews no llevan branding de Jin ni enlaces de vuelta al panel, para no transferirle confianza.
 
 ### 5.3 DNS y certificados
 
 - Ambos dominios con Cloudflare como DNS.
-- CNAME wildcard `*.yormun.com` y `*.yormungander.com` apuntando al túnel.
+- CNAME wildcard `*.jeanfranck.com` y `*.jinserver.com` apuntando al túnel.
 - **cert-manager** con `ClusterIssuer` de Let's Encrypt usando challenge **DNS-01** (obligatorio para wildcards). Credenciales Cloudflare API en Infisical.
 
 ### 5.4 Ingress dinámico
 
-- Cuando un agente levanta una mini-app (ej. React de prueba) en puerto 8081, core crea un `IngressRoute` de Traefik con el subdominio `app-{uuid}.yormungander.com`.
-- Los subdominios de agentes tienen TTL configurable (default 24 h) y se limpian por cron.
-- Todos los subdominios de agentes están detrás de Cloudflare Access (requieren autenticación).
+- Cuando un agente levanta una mini-app (ej. React de prueba) en puerto 8081, core crea un `IngressRoute` de Traefik con el subdominio `<slug>.jinserver.com`.
+- **El slug lleva sufijo aleatorio** (`residuos-educan-a7f3k9`), no solo el nombre del proyecto: delante de una preview no hay login, así que la única barrera contra quien adivine la URL es la entropía del subdominio. El prefijo legible se conserva para poder distinguirlas de un vistazo.
+- Los subdominios de agentes tienen **TTL obligatorio** (definido por el owner al aprobar, ej. 4 h; cap máximo 24 h) y los limpia un reaper por cron. Extender el tiempo requiere una aprobación nueva — no existe camino por el cual un servicio quede corriendo indefinidamente.
+- Opcionalmente detrás de Cloudflare Access para las previews que el owner no quiera compartir con nadie.
+
+**Limitación conocida:** dos previews bajo `jinserver.com` siguen siendo *same-site entre sí*, así que una puede hacer cookie tossing sobre otra. Aislarlas de verdad requiere meter `jinserver.com` en la Public Suffix List (lo que hace `github.io`); es gratis pero tarda meses en propagar. Queda como item de hardening de Fase 7.3, no bloquea nada.
 
 ---
 
@@ -337,21 +349,21 @@ Ver `AGENTS.md` sección "Seguridad" para las reglas duras. Resumen:
 
 ### 8.1 Web Dashboard
 
-- **Stack:** Vite + React 19 + React Router v7 (framework mode). Repo propio: `Yormun_Web`.
-- **Compilación:** static build servido desde **Cloudflare Pages** en `dash.yormun.com` (fuera de la VM, cero costo, cero consumo de OCI).
+- **Stack:** Vite + React 19 + React Router v7 (framework mode). Repo propio: `Jin_Web`.
+- **Compilación:** static build servido desde **Cloudflare Pages** en `jin.jeanfranck.com` (fuera de la VM, cero costo, cero consumo de OCI).
 - **Editor de código:** Monaco Editor con Zone Widgets para comentarios inline de la IA.
-- **Applets:** iframes con `sandbox="allow-scripts"` cargando subdominios `app-{uuid}.yormungander.com` (cross-origin por diseño, ver 5.2).
+- **Applets:** iframes con `sandbox="allow-scripts"` cargando subdominios `app-{uuid}.jinserver.com` (cross-origin por diseño, ver 5.2).
 - **Comunicación con backend:** REST para comandos, WebSocket para eventos en tiempo real (progreso de tareas, aprobaciones pendientes). Tipos generados desde el OpenAPI de core.
 
 ### 8.2 Telegram Bot
 
-- grammY con webhook (no polling) para bajo consumo. Módulo interno de yormun-core.
+- grammY con webhook (no polling) para bajo consumo. Módulo interno de jin-core.
 - Comandos: `/tasks`, `/approve`, `/reject`, `/status`, `/budget`, `/audio` (transcribe y guarda en Notion).
 - Cards de HITL con botones inline (`Aprobar`, `Rechazar`, `Ver detalles`).
 
 ### 8.3 CLI
 
-- **Ink** + **Inquirer.js** para menús navegables con teclas de flecha. Repo propio: `Yormun_CLI`.
+- **Ink** + **Inquirer.js** para menús navegables con teclas de flecha. Repo propio: `Jin_CLI`.
 - Se conecta al mismo API de core (tipos generados desde su OpenAPI).
 - Casos de uso: desarrollo local, debugging, admin tasks (rotar tokens, forzar backup, ver logs recientes).
 
@@ -376,7 +388,7 @@ Son intencionales. Evitan el "apruebo todo por reflejo" cuando estás en el móv
 
 ### 9.3 Clasificador HITL
 
-- **Ubicación:** módulo `hitl-classifier` en yormun-core.
+- **Ubicación:** módulo `hitl-classifier` en jin-core.
 - **Datos:** cada tool en el registry declara su `hitlLevel` como parte de su definición estática.
 - **Prohibido:** el LLM no puede cambiar el `hitlLevel` de una tool en runtime.
 - **Verificación:** unit tests obligatorios cubriendo 100% de la matriz tool × level. Si el LLM decide llamar una tool `dual-confirm` como si fuera `auto`, el clasificador rechaza.
@@ -501,7 +513,7 @@ Tres niveles de presupuesto, todos configurables en `config/budget.yaml`:
 
 ### 12.1 GitOps con Flux
 
-- Repo `Yormun_Infra` con manifests de Kubernetes (Kustomize), scripts de bootstrap y de backup.
+- Repo `Jin_Infra` con manifests de Kubernetes (Kustomize), scripts de bootstrap y de backup.
 - Flux corre en K3s, hace polling cada 5 min.
 - `git push` a `main` → detecta cambios → aplica cambios → notifica Telegram.
 
@@ -520,10 +532,10 @@ Tres niveles de presupuesto, todos configurables en `config/budget.yaml`:
 
 Cada repo tiene su propio pipeline — un fallo en un repo jamás bloquea a los demás:
 
-- **Yormun_Core / Yormun_Executor:** lint, typecheck, unit tests, integration tests (Postgres + Redis en Docker), generación y commit de `contracts/openapi.json`, build de imagen, push a GHCR.
-- **Yormun_Web:** lint, typecheck, `generate:api` contra el contrato de core (el drift rompe el build aquí, no en producción), tests, deploy a Cloudflare Pages.
-- **Yormun_CLI:** lint, typecheck, `generate:api`, tests.
-- **Yormun_Infra:** kube-linter/kubeval sobre los manifests; Flux hace el deploy.
+- **Jin_Core / Jin_Executor:** lint, typecheck, unit tests, integration tests (Postgres + Redis en Docker), generación y commit de `contracts/openapi.json`, build de imagen, push a GHCR.
+- **Jin_Web:** lint, typecheck, `generate:api` contra el contrato de core (el drift rompe el build aquí, no en producción), tests, deploy a Cloudflare Pages.
+- **Jin_CLI:** lint, typecheck, `generate:api`, tests.
+- **Jin_Infra:** kube-linter/kubeval sobre los manifests; Flux hace el deploy.
 - Node por repo vía `.nvmrc` (`setup-node` lo lee). Workflows comunes como reusable workflows (`workflow_call`) para no duplicar boilerplate.
 
 ---
@@ -562,8 +574,8 @@ Ordenado por dependencia y riesgo, no por atractivo.
 
 ### Fase 2: Núcleo (semanas 3-4)
 
-- Repos Yormun_Core y Yormun_Executor scaffoldeados (CI propio, `.nvmrc`, OpenAPI export).
-- Yormun_Core: boilerplate + auth + BullMQ.
+- Repos Jin_Core y Jin_Executor scaffoldeados (CI propio, `.nvmrc`, OpenAPI export).
+- Jin_Core: boilerplate + auth + BullMQ.
 - Executor separado con RBAC.
 - ModelProvider abstracto + implementaciones Anthropic y Google.
 - Telegram bot con grammY.
@@ -596,7 +608,7 @@ Ordenado por dependencia y riesgo, no por atractivo.
 
 - Web Dashboard SPA con Monaco.
 - Zone Widgets para comentarios inline.
-- Iframes de applets (en `yormungander.com`).
+- Iframes de applets (en `jinserver.com`).
 - CLI con Ink.
 - **Criterio de éxito:** puedes editar código en el dashboard, la IA comenta línea por línea, y aprobar cambios desde ahí.
 
@@ -612,7 +624,7 @@ Ordenado por dependencia y riesgo, no por atractivo.
 
 ## 15. Reglas de oro (nunca romper)
 
-1. **yormun-core jamás toca el socket de Docker/K3s.** Todo pasa por Executor.
+1. **jin-core jamás toca el socket de Docker/K3s.** Todo pasa por Executor.
 2. **Ningún secreto en código, ni en env, ni en Git.** Todo en Infisical.
 3. **Ningún backup no probado cuenta como backup.** Restore test mensual obligatorio.
 4. **El HITL level de una tool jamás lo decide el LLM.** Es estático y solo cambiable con dual-confirm humano.
@@ -621,6 +633,6 @@ Ordenado por dependencia y riesgo, no por atractivo.
 7. **Toda tool destructiva es `dual-confirm`.** Cuando dudes entre `confirm` y `dual-confirm`, elige `dual-confirm`.
 8. **Toda decisión mostrada al humano en HITL debe incluir la lista de inputs externos que influyeron.**
 9. **El timeout nunca aprueba automáticamente.** Solo descarta o escala.
-10. **Contenido generado por agentes se sirve solo desde `yormungander.com`, nunca desde `yormun.com`.**
+10. **Contenido generado por agentes se sirve solo desde el dominio sandbox (hoy `jinserver.com`), jamás desde el dominio de confianza (`jeanfranck.com` ni ninguno de sus subdominios).** La regla es por *rol*, no por hostname: si algún día cambian los dominios, lo que manda es la separación entre zona confiable y zona sandbox, no los nombres concretos.
 11. **Ningún tipo se copia a mano entre repos.** Los contratos se generan desde OpenAPI.
 12. **Cuando el blueprint y el código difieran, se corrige el código o el blueprint — nunca se ignora la diferencia.**

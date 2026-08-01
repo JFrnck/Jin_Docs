@@ -35,7 +35,7 @@ Notas:
 
 ## 2. Router del sistema en runtime
 
-En `Yormun_Core` (`src/model-provider/router.ts`) se define un mapa `TaskProfile → Model`. Este mapa NO se hardcodea — vive en `config/models.yaml`.
+En `Jin_Core` (`src/model-provider/router.ts`) se define un mapa `TaskProfile → Model`. Este mapa NO se hardcodea — vive en `config/models.yaml`.
 
 ### 2.1 TaskProfiles definidos
 
@@ -234,7 +234,7 @@ Todo prompt del `ModelProvider` que involucre generar código sobre librerías d
 
 ### Implementación
 
-`Yormun_Core/src/config/versions.ts`:
+`Jin_Core/src/config/versions.ts`:
 
 ```typescript
 export async function getInstalledVersions(packageNames: string[]): Promise<Record<string, string>>;

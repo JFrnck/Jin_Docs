@@ -2,7 +2,7 @@
 
 > Este archivo lo carga Claude Code automáticamente. Extiende (no reemplaza) `AGENTS.md`.
 > **Lee `AGENTS.md` primero.** Todo lo declarado allí aplica. Aquí solo va lo específico a Claude Code.
-> Workspace local: carpeta `Yormun/` con todos los repos clonados lado a lado (ver `AGENTS.md` 4.1).
+> Workspace local: carpeta `Jin/` con todos los repos clonados lado a lado (ver `AGENTS.md` 4.1).
 
 ---
 
@@ -39,8 +39,8 @@ Si dudas: **Sonnet 5**. Si el problema requirió >30 min sin progreso: cambia a 
 Actívalo (Shift+Tab dos veces en la terminal) para:
 
 - Cualquier cambio que toque >5 archivos.
-- Cualquier cambio en `Yormun_Core/src/hitl/`, `Yormun_Core/src/audit/`, `Yormun_Core/src/memory/`, o el repo `Yormun_Executor`.
-- Cualquier cambio en manifests de infra (repo `Yormun_Infra`).
+- Cualquier cambio en `Jin_Core/src/hitl/`, `Jin_Core/src/audit/`, `Jin_Core/src/memory/`, o el repo `Jin_Executor`.
+- Cualquier cambio en manifests de infra (repo `Jin_Infra`).
 - Cualquier cambio de dependencias en el `package.json` de cualquier repo.
 - Cualquier cambio que rompa o modifique un contrato OpenAPI.
 
@@ -64,8 +64,8 @@ Cuando el plan esté listo, léelo con el owner línea por línea antes de acept
 
 Claude Code lidera estas partes (ver `docs/WORKFLOW.md` para el mapa completo):
 
-- Repo `Yormun_Executor` **completo** — RBAC, ejecución aislada, ciclo de vida de pods.
-- En `Yormun_Core`:
+- Repo `Jin_Executor` **completo** — RBAC, ejecución aislada, ciclo de vida de pods.
+- En `Jin_Core`:
   - `src/hitl/**` — clasificador HITL, timeouts, aprobaciones.
   - `src/audit/**` — audit log, hash chain, verificación de integridad.
   - `src/budget/**` — budget guard, kill switch, rate limiter.
@@ -73,7 +73,7 @@ Claude Code lidera estas partes (ver `docs/WORKFLOW.md` para el mapa completo):
   - `src/memory/**` — memoria extendida sqlite-vec.
   - `src/model-provider/**` — router de LLMs.
 - Tests de las piezas anteriores.
-- ADRs (Architecture Decision Records) transversales en `Yormun_Docs/docs/adr/`.
+- ADRs (Architecture Decision Records) transversales en `Jin_Docs/docs/adr/`.
 
 ---
 
@@ -94,18 +94,18 @@ pnpm test
 pnpm generate:api                  # Regenera tipos desde el openapi.json del productor
 pnpm generate:contract             # (core/executor) Regenera contracts/openapi.json propio
 
-# --- Yormun_Core desde Fase 2 ---
+# --- Jin_Core desde Fase 2 ---
 pnpm test:integration              # Integration tests con testcontainers
 pnpm test:coverage
 pnpm db:migrate                    # Aplicar migraciones
 pnpm db:migrate:down               # Rollback última migración
 
-# --- Yormun_Web desde Fase 6 ---
+# --- Jin_Web desde Fase 6 ---
 pnpm test:e2e                      # E2E con Playwright
 
 # --- Levantar el stack local completo ---
 # Cada repo corre su propio `pnpm dev` en su terminal (core + executor mínimo).
-# Postgres/Redis locales: docker compose -f Yormun_Infra/docker-compose.dev.yaml up
+# Postgres/Redis locales: docker compose -f Jin_Infra/docker-compose.dev.yaml up
 ```
 
 ---
@@ -123,7 +123,7 @@ pnpm test:e2e                      # E2E con Playwright
 
 Antes de empezar cualquier trabajo:
 
-1. Lee `Yormun/Yormun_Docs/STATUS.md` para ver qué está haciendo Antigravity ahora y en qué repo.
+1. Lee `Jin/Jin_Docs/STATUS.md` para ver qué está haciendo Antigravity ahora y en qué repo.
 2. Verifica que tu rama no colisiona con `feature/antigravity/*` activas **en el mismo repo** (repos distintos = cero colisión posible).
 3. Si tu tarea toca archivos de core que Antigravity está editando, **detente** y coordina con el owner.
 

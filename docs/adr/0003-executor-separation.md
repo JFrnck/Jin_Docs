@@ -4,7 +4,7 @@
 
 ## Contexto
 
-BLUEPRINT §4.2-4.4 y AGENTS.md §5.3 establecen que Yormun_Executor es el único proceso autorizado a hablar con Kubernetes, y que corre código LLM-generado en pods Deno efímeros bajo demanda. La Fase 2.3 implementa ese microservicio: validación RBAC contra una whitelist de tools, construcción y ciclo de vida de los pods, y el endpoint `POST /execute`.
+BLUEPRINT §4.2-4.4 y AGENTS.md §5.3 establecen que Jin_Executor es el único proceso autorizado a hablar con Kubernetes, y que corre código LLM-generado en pods Deno efímeros bajo demanda. La Fase 2.3 implementa ese microservicio: validación RBAC contra una whitelist de tools, construcción y ciclo de vida de los pods, y el endpoint `POST /execute`.
 
 Durante la implementación surgieron varias decisiones no cubiertas explícitamente por BLUEPRINT/PROMPTS, más un hallazgo de seguridad real verificado empíricamente contra un clúster K3s de prueba.
 
@@ -12,7 +12,7 @@ Durante la implementación surgieron varias decisiones no cubiertas explícitame
 
 ### 1. Whitelist propia del Executor, separada del registry de Core
 
-`src/tools/registry.ts` de Yormun_Core declara `hitlLevel` (nivel de aprobación humana). El Executor necesita un concepto distinto — qué identificadores de tool pueden ejecutar código y con qué `egressWhitelist` — así que declara su propio registry estático (`src/rbac/tool-whitelist.ts`), sin paquete compartido entre repos (AGENTS.md 4.5). Arranca con una sola tool stub, `runCode`, sin egreso.
+`src/tools/registry.ts` de Jin_Core declara `hitlLevel` (nivel de aprobación humana). El Executor necesita un concepto distinto — qué identificadores de tool pueden ejecutar código y con qué `egressWhitelist` — así que declara su propio registry estático (`src/rbac/tool-whitelist.ts`), sin paquete compartido entre repos (AGENTS.md 4.5). Arranca con una sola tool stub, `runCode`, sin egreso.
 
 ### 2. Limitación conocida: whitelist de egreso por dominio no resuelve a CIDR todavía
 
@@ -20,7 +20,7 @@ AGENTS.md 5.5 exige que el Executor aplique NetworkPolicies según el `egressWhi
 
 ### 3. RBAC del ServiceAccount: extensión mínima necesaria más allá del texto literal de BLUEPRINT
 
-BLUEPRINT 4.2 describe el Role como "create/get/list/delete de Pods, nada más". Para cumplir con el punto 2 (crear una NetworkPolicy por pod cuando haga falta) el ServiceAccount necesita además `create`/`delete` sobre `networkpolicies` en el namespace `agents-sandbox` — sin este permiso, AGENTS.md 5.5 sería imposible de cumplir. Es una extensión necesaria, no una desviación: sigue sin acceso a Secrets, ConfigMaps, Deployments, ni otros namespaces. **Pendiente:** actualizar el manifest de Role en `Yormun_Infra/k8s/base/executor/` (PR aparte, coordinado por STATUS.md, según indica PROMPTS.md 2.3).
+BLUEPRINT 4.2 describe el Role como "create/get/list/delete de Pods, nada más". Para cumplir con el punto 2 (crear una NetworkPolicy por pod cuando haga falta) el ServiceAccount necesita además `create`/`delete` sobre `networkpolicies` en el namespace `agents-sandbox` — sin este permiso, AGENTS.md 5.5 sería imposible de cumplir. Es una extensión necesaria, no una desviación: sigue sin acceso a Secrets, ConfigMaps, Deployments, ni otros namespaces. **Pendiente:** actualizar el manifest de Role en `Jin_Infra/k8s/base/executor/` (PR aparte, coordinado por STATUS.md, según indica PROMPTS.md 2.3).
 
 ### 4. `deno eval` es inadecuado para el sandbox — usar `deno run`
 
@@ -37,7 +37,7 @@ Hallazgo operativo durante esta verificación: la imagen de Deno puede tardar >1
 ## Consecuencias
 
 - El sandbox de ejecución es real: verificado con K3s real, no solo con el diseño en el papel.
-- Queda un PR pendiente en Yormun_Infra para la extensión de RBAC (punto 3) antes de que el mecanismo de NetworkPolicy por pod pueda usarse en producción — hoy es código muerto en la práctica porque ninguna tool lo activa.
+- Queda un PR pendiente en Jin_Infra para la extensión de RBAC (punto 3) antes de que el mecanismo de NetworkPolicy por pod pueda usarse en producción — hoy es código muerto en la práctica porque ninguna tool lo activa.
 - La resolución dominio→CIDR (punto 2) es deuda técnica explícita y deliberada, no un olvido: falla ruidosamente en vez de fallar en silencio.
 
 ## Alternativas consideradas

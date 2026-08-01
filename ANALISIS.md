@@ -1,4 +1,4 @@
-# ANALISIS.md — Refinamiento JI-PYEONG → YORMUNGANDER
+# ANALISIS.md — Refinamiento JI-PYEONG → Jin
 
 > Análisis y decisiones del refinamiento (2026-07-19). Los cambios aceptados ya están aplicados en los demás docs. Lo que aquí es solo opinión está marcado como **[recomendación, no aplicada]**.
 
@@ -6,16 +6,17 @@
 
 ## 1. Nombre
 
-- **Proyecto:** YORMUNGANDER. **Alias corto:** Yormun (branding, CLI, repos).
-- Referencia: la serpiente nórdica Jörmungandr. Se mantiene tu grafía "Yormungander" como nombre canónico.
-- Renombres derivados: repos `Yormun_*` (carpeta local `Yormun/`), namespaces K8s en minúscula `yormun` / `yormun-executor` (K8s lo exige), clase base de errores `YormunError`, bucket R2 `yormun-backups`.
+- **Proyecto:** Jin (nombre, branding, CLI, repos).
+- Historia del nombre: JI-PYEONG → Yormungander/Yormun (referencia a la serpiente nórdica Jörmungandr) → **Jin** (2026-07-31, decisión del owner). El nombre corto ganó por ergonomía: se escribe todos los días en repos, paquetes y namespaces.
+- Renombres derivados: repos `Jin_*` (carpeta local `Jin/`), namespaces K8s en minúscula `jin` / `jin-executor` (K8s lo exige), clase base de errores `JinError`, bucket R2 `jin-backups`.
 
 ## 2. Dominios: cuál para qué
 
-| Dominio | Rol | Subdominios |
+| Dominio | Rol | Hosts |
 | --- | --- | --- |
-| **yormun.com** | **Núcleo confiable.** Lo que tú usas a diario. | `api.yormun.com` (NestJS), `dash.yormun.com` (dashboard en Cloudflare Pages), `grafana.yormun.com`, `*.yormun.com` wildcard |
-| **yormungander.com** | **Zona efímera / no-confiable.** Todo lo que generan los agentes. | `app-{uuid}.yormungander.com` (applets), previews, share links. Raíz libre para landing/blog si algún día quieres. |
+| **jeanfranck.com** | **Identidad del owner.** Portafolio personal, no forma parte de Jin. | Raíz y paths (`/proyecto`, etc.) |
+| **jin.jeanfranck.com** | **Núcleo confiable.** Lo que tú usas a diario. | Dashboard (Cloudflare Pages) + API bajo el path `/api`, ruteada al túnel |
+| **jinserver.com** | **Zona sandbox / no-confiable.** Todo lo que generan los agentes. | `<slug>.jinserver.com` — applets, previews, share links, con TTL obligatorio. Raíz sin contenido, a propósito. |
 
 Razones:
 
@@ -27,12 +28,12 @@ Razones:
 
 | Repo | Antes | Función | Veredicto |
 | --- | --- | --- | --- |
-| **Yormun_Core** | `apps/ji-pyeong` | El cerebro: API REST/WS, auth, crons, BullMQ, HITL, audit, budget, security, model-provider, memoria (sqlite-vec), integraciones, y el bot de Telegram **como módulo interno** (decisión original correcta: necesita acceso directo a HITL/audit sin latencia de red). | Se queda. Es la única app "grande". |
-| **Yormun_Executor** | `apps/executor` | Único proceso autorizado a hablar con K8s. Crea/destruye pods en `agents-sandbox`, decide local vs Modal. | Se queda **separado sí o sí**: es la frontera de seguridad central del proyecto. Fusionarlo con core rompería la regla de oro #1. |
-| **Yormun_Web** | `apps/web` | Dashboard React (Monaco, applets, aprobaciones). Se despliega en Cloudflare Pages, ni siquiera corre en tu VM. | Se queda, y es el **mayor beneficiado del split**: árbol de dependencias enorme y frágil (Monaco, React 19, Vite) que era el candidato #1 a romper el CI de todos. Ciclo de vida y destino de deploy distintos = repo distinto. |
-| **Yormun_CLI** | `apps/cli` | Cliente Ink del mismo API. Admin/debug. | Se queda como repo aparte pero es opcional y de baja prioridad (Fase 6). Cliente delgado: no comparte código con nadie, solo consume el API. |
-| **Yormun_Infra** | `infra/` + repo GitOps | Manifests Kustomize, Flux, bootstrap, scripts de backup. | Ya era repo separado en el blueprint (12.1). Ahora también absorbe `scripts/backup`. Los Dockerfiles se van a cada repo de app (cada CI construye su imagen). |
-| **Yormun_Docs** | `docs/` + raíz | BLUEPRINT, WORKFLOW, MODEL_ROUTING, PROMPTS, ADRs transversales, `STATUS.md`. | Nuevo meta-repo. Es el punto de coordinación entre IDEs. |
+| **Jin_Core** | `apps/ji-pyeong` | El cerebro: API REST/WS, auth, crons, BullMQ, HITL, audit, budget, security, model-provider, memoria (sqlite-vec), integraciones, y el bot de Telegram **como módulo interno** (decisión original correcta: necesita acceso directo a HITL/audit sin latencia de red). | Se queda. Es la única app "grande". |
+| **Jin_Executor** | `apps/executor` | Único proceso autorizado a hablar con K8s. Crea/destruye pods en `agents-sandbox`, decide local vs Modal. | Se queda **separado sí o sí**: es la frontera de seguridad central del proyecto. Fusionarlo con core rompería la regla de oro #1. |
+| **Jin_Web** | `apps/web` | Dashboard React (Monaco, applets, aprobaciones). Se despliega en Cloudflare Pages, ni siquiera corre en tu VM. | Se queda, y es el **mayor beneficiado del split**: árbol de dependencias enorme y frágil (Monaco, React 19, Vite) que era el candidato #1 a romper el CI de todos. Ciclo de vida y destino de deploy distintos = repo distinto. |
+| **Jin_CLI** | `apps/cli` | Cliente Ink del mismo API. Admin/debug. | Se queda como repo aparte pero es opcional y de baja prioridad (Fase 6). Cliente delgado: no comparte código con nadie, solo consume el API. |
+| **Jin_Infra** | `infra/` + repo GitOps | Manifests Kustomize, Flux, bootstrap, scripts de backup. | Ya era repo separado en el blueprint (12.1). Ahora también absorbe `scripts/backup`. Los Dockerfiles se van a cada repo de app (cada CI construye su imagen). |
+| **Jin_Docs** | `docs/` + raíz | BLUEPRINT, WORKFLOW, MODEL_ROUTING, PROMPTS, ADRs transversales, `STATUS.md`. | Nuevo meta-repo. Es el punto de coordinación entre IDEs. |
 | ~~packages/shared-*~~ | `shared-types`, `shared-config`, `shared-audit` | — | **Se disuelven.** Eran la razón de ser del monorepo. `shared-types` → tipos generados desde OpenAPI; `shared-config` → cada repo valida su config con Zod localmente; `shared-audit` → solo lo usaba core, se pliega a `core/src/audit`. |
 
 ## 4. Salida del monorepo: opciones y decisión
@@ -47,7 +48,7 @@ Un repo por app. Nada de paquetes compartidos: core y executor generan `contract
 - Pros: CI, deps, lockfile, Node y deploy 100% independientes por repo (exactamente lo que pediste: mantenimiento y escalado unitario). Cero publishing. Radio de explosión de cualquier fallo = 1 repo.
 - Contras: un cambio cross-cutting (API + web) son 2 PRs; cambios de API deben ser retrocompatibles o hacerse en dos pasos (expand → contract). Con un solo dev y contratos generados, es un costo bajo.
 
-**B. Multi-repo + paquete `@yormun/contracts` en GitHub Packages.**
+**B. Multi-repo + paquete `@jin/contracts` en GitHub Packages.**
 Tipos centralizados escritos a mano y publicados como npm privado.
 
 - Pros: un solo lugar para los tipos.
@@ -64,30 +65,30 @@ Carpetas con `package.json`, lockfile y `.nvmrc` propios; CI filtrado por paths.
 ### Cómo queda (opción A)
 
 ```
-Yormun/              ← carpeta local, no es un repo
-  Yormun_Docs/
-  Yormun_Core/       Node 24 LTS
-  Yormun_Executor/   Node 24 LTS
-  Yormun_Web/        Node según lo que pida Vite/React (libre)
-  Yormun_CLI/        Node 24 LTS
-  Yormun_Infra/      (sin Node: YAML + bash)
+Jin/              ← carpeta local, no es un repo
+  Jin_Docs/
+  Jin_Core/       Node 24 LTS
+  Jin_Executor/   Node 24 LTS
+  Jin_Web/        Node según lo que pida Vite/React (libre)
+  Jin_CLI/        Node 24 LTS
+  Jin_Infra/      (sin Node: YAML + bash)
 ```
 
-Detalle importante: **la comodidad de "todo en una carpeta" no se pierde.** Clonas los seis repos bajo `Yormun/` y abres esa carpeta en el IDE: Claude Code y Antigravity ven todo el contexto, como antes. Lo que muere es el acoplamiento de CI/deps, no la vista unificada local.
+Detalle importante: **la comodidad de "todo en una carpeta" no se pierde.** Clonas los seis repos bajo `Jin/` y abres esa carpeta en el IDE: Claude Code y Antigravity ven todo el contexto, como antes. Lo que muere es el acoplamiento de CI/deps, no la vista unificada local.
 
 Node: `.nvmrc` + `engines` por repo; `setup-node` en CI lee `.nvmrc`. Core/executor en **Node 24** (LTS activo desde Oct 2025; el 22 del blueprint ya está en maintenance — probable causa de tus errores de versión). Web puede moverse a su ritmo sin arrastrar al backend.
 
-Mitigación del único costo real (boilerplate ×6): workflows de CI reutilizables (`workflow_call`) viviendo en Yormun_Infra, y un template repo para futuros servicios.
+Mitigación del único costo real (boilerplate ×6): workflows de CI reutilizables (`workflow_call`) viviendo en Jin_Infra, y un template repo para futuros servicios.
 
 ## 5. Tecnología definida (por repo)
 
 | Repo | Stack | Deploy |
 | --- | --- | --- |
-| Yormun_Core | Node 24, TS strict, NestJS, BullMQ, Zod, pino, grammY, `@nestjs/swagger`, Drizzle **[recomendación]** o Prisma, pgvector, better-sqlite3 + sqlite-vec | Imagen → GHCR → Flux → K3s |
-| Yormun_Executor | Node 24, TS strict, NestJS, `@kubernetes/client-node`, Modal SDK, Zod | Igual |
-| Yormun_Web | Vite, React 19, React Router v7, Monaco, tipos generados de OpenAPI | Cloudflare Pages |
-| Yormun_CLI | Node 24, Ink, tipos generados de OpenAPI | npm local / binario |
-| Yormun_Infra | Kustomize, Flux, cert-manager, kube-linter en CI, bash | `git push` → Flux |
+| Jin_Core | Node 24, TS strict, NestJS, BullMQ, Zod, pino, grammY, `@nestjs/swagger`, Drizzle **[recomendación]** o Prisma, pgvector, better-sqlite3 + sqlite-vec | Imagen → GHCR → Flux → K3s |
+| Jin_Executor | Node 24, TS strict, NestJS, `@kubernetes/client-node`, Modal SDK, Zod | Igual |
+| Jin_Web | Vite, React 19, React Router v7, Monaco, tipos generados de OpenAPI | Cloudflare Pages |
+| Jin_CLI | Node 24, Ink, tipos generados de OpenAPI | npm local / binario |
+| Jin_Infra | Kustomize, Flux, cert-manager, kube-linter en CI, bash | `git push` → Flux |
 | Pods efímeros | Deno 2.x | Creados por executor |
 
 Sobre ORM: el blueprint dejaba "Prisma o Drizzle" abierto. **[Recomendación]** Drizzle: más liviano en RAM/arranque sobre ARM, SQL-first (mejor con pgvector crudo), sin engine binario. Cualquiera de los dos es defendible; decídelo en la Fase 2.1 y escribe el ADR.
@@ -103,7 +104,7 @@ Sobre ORM: el blueprint dejaba "Prisma o Drizzle" abierto. **[Recomendación]** 
 
 **Estado verificado (jul 2026):** sqlite-vec ya soporta columnas de metadata con filtrado (el mayor update desde v0.1) y tiene índices ANN en alpha (rescore, IVF experimental, DiskANN). Conclusión: **usa brute-force + filtros de metadata, que es lo estable; no dependas del ANN todavía.** A tu escala no lo necesitas.
 
-**Reglas de diseño aplicadas:** solo `Yormun_Core` (módulo `src/memory/`) toca `memory.db`; los pods jamás. WAL mode, un solo writer. Metadata mínima por entrada: `tipo`, `fuente`, `fecha`, `modelo_embedding` (esto último permite migrar de modelo de embeddings sin adivinar). Si algún día crece de más, migrar a pgvector es un script.
+**Reglas de diseño aplicadas:** solo `Jin_Core` (módulo `src/memory/`) toca `memory.db`; los pods jamás. WAL mode, un solo writer. Metadata mínima por entrada: `tipo`, `fuente`, `fecha`, `modelo_embedding` (esto último permite migrar de modelo de embeddings sin adivinar). Si algún día crece de más, migrar a pgvector es un script.
 
 **MCP para docs externas: se mantiene tal cual** (Context7 + MCPs oficiales). Correcta división: MCP = conocimiento *externo* fresco on-demand; sqlite-vec = memoria *interna* del sistema; pgvector = corpus *propio* indexado. Tres problemas, tres herramientas, cero solapamiento.
 
@@ -145,8 +146,8 @@ El proyecto es sólido y está sobre-ingenierizado *a propósito* donde debe (se
 
 ## 9. Registro de cambios aplicados a los docs
 
-1. Nombre JI-PYEONG → YORMUNGANDER (Yormun) en todos los docs, clases, namespaces, buckets.
-2. Sección de dominios reescrita: yormun.com (confiable) / yormungander.com (efímero).
+1. Nombre JI-PYEONG → Jin en todos los docs, clases, namespaces, buckets.
+2. Sección de dominios reescrita: jin.jeanfranck.com (confiable) / jinserver.com (sandbox).
 3. Monorepo eliminado: multi-repo A con contratos OpenAPI; layout, ownership, comandos, prompts y CI actualizados; packages `shared-*` disueltos.
 4. sqlite-vec añadido (BLUEPRINT 3.3.1 + módulo `memory` + backup nocturno + roadmap Fase 4).
 5. Warm pool eliminado; pods bajo demanda; quota como techo; core a 1 réplica.

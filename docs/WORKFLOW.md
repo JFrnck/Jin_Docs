@@ -2,7 +2,7 @@
 
 > **Objetivo:** que dos LLMs distintos trabajen sobre el mismo proyecto sin pisarse ni introducir conflictos silenciosos.
 > Regla mental: **piensa en cada IDE como un colaborador humano remoto**. Aplican las mismas reglas de coordinación: ownership, branches, handoffs, no editar lo mismo al mismo tiempo.
-> Con el multi-repo, la mayor parte de la coordinación se resuelve sola: **repos distintos = colisión imposible.** El único territorio compartido real es `Yormun_Core`.
+> Con el multi-repo, la mayor parte de la coordinación se resuelve sola: **repos distintos = colisión imposible.** El único territorio compartido real es `Jin_Core`.
 
 ---
 
@@ -36,16 +36,16 @@ Usa cada uno donde su fortaleza importa.
 
 | Repo                | Owner primario | Razón                                                            |
 | ------------------- | -------------- | ---------------------------------------------------------------- |
-| **Yormun_Executor** | Claude Code    | Frontera de seguridad: RBAC, ejecución aislada                   |
-| **Yormun_Web**      | Antigravity    | Frontend React grande — se beneficia del contexto amplio         |
-| **Yormun_CLI**      | Antigravity    | Ink CLI, scaffolding rápido                                      |
-| **Yormun_Infra**    | Antigravity    | Manifests Kustomize, muchos archivos similares                   |
-| **Yormun_Docs**     | Compartido     | Cambios por PR con revisión del owner                            |
-| **Yormun_Core**     | Compartido     | Único repo donde ambos trabajan — ver mapa interno en 2.2        |
+| **Jin_Executor** | Claude Code    | Frontera de seguridad: RBAC, ejecución aislada                   |
+| **Jin_Web**      | Antigravity    | Frontend React grande — se beneficia del contexto amplio         |
+| **Jin_CLI**      | Antigravity    | Ink CLI, scaffolding rápido                                      |
+| **Jin_Infra**    | Antigravity    | Manifests Kustomize, muchos archivos similares                   |
+| **Jin_Docs**     | Compartido     | Cambios por PR con revisión del owner                            |
+| **Jin_Core**     | Compartido     | Único repo donde ambos trabajan — ver mapa interno en 2.2        |
 
 El owner primario de un repo puede trabajar sin avisar. El otro IDE solo entra a ese repo con negociación previa (nota en `STATUS.md` + ok del owner humano).
 
-### 2.2 Dentro de Yormun_Core (el único territorio mixto)
+### 2.2 Dentro de Jin_Core (el único territorio mixto)
 
 **Claude Code lidera:**
 
@@ -105,7 +105,7 @@ Cuando una feature toca productor y consumidor (ej. endpoint nuevo en core + pan
 
 ## 4. STATUS.md — mecanismo de coordinación ligero
 
-Vive en la raíz del repo `Yormun_Docs` (es decir, `Yormun/Yormun_Docs/STATUS.md`). Ambos IDEs lo leen al empezar y lo actualizan al terminar. Cubre los seis repos.
+Vive en la raíz del repo `Jin_Docs` (es decir, `Jin/Jin_Docs/STATUS.md`). Ambos IDEs lo leen al empezar y lo actualizan al terminar. Cubre los seis repos.
 
 ### 4.1 Formato
 
@@ -118,7 +118,7 @@ Vive en la raíz del repo `Yormun_Docs` (es decir, `Yormun/Yormun_Docs/STATUS.md
 
 ### Claude Code
 
-- **Repo:** Yormun_Core
+- **Repo:** Jin_Core
 - **Rama:** `feature/claude/hitl-classifier`
 - **Descripción:** Implementando el clasificador HITL para tools de Google Calendar.
 - **Archivos activos:**
@@ -128,7 +128,7 @@ Vive en la raíz del repo `Yormun_Docs` (es decir, `Yormun/Yormun_Docs/STATUS.md
 
 ### Antigravity
 
-- **Repo:** Yormun_Core
+- **Repo:** Jin_Core
 - **Rama:** `feature/antigravity/canvas-integration`
 - **Descripción:** Scaffolding de la integración con Canvas LMS.
 - **Archivos activos:**
@@ -142,15 +142,15 @@ Vive en la raíz del repo `Yormun_Docs` (es decir, `Yormun/Yormun_Docs/STATUS.md
 
 ## Recientemente completado (últimos 7 días)
 
-- 2026-07-14: [Yormun_Core] `feature/claude/audit-hash-chain` merged.
-- 2026-07-13: [Yormun_Infra] `feature/antigravity/k3s-manifests` merged.
+- 2026-07-14: [Jin_Core] `feature/claude/audit-hash-chain` merged.
+- 2026-07-13: [Jin_Infra] `feature/antigravity/k3s-manifests` merged.
 ```
 
 ### 4.2 Reglas
 
 - **Actualiza al empezar** una sesión de trabajo: añade tu repo, tu rama, tus archivos.
 - **Actualiza al terminar** una sesión: mueve a "recientemente completado" o marca como "en pausa".
-- **Antes de editar** un archivo de Yormun_Core, verifica que no aparezca en la sección "En progreso" del otro IDE. En los demás repos basta con respetar el owner primario.
+- **Antes de editar** un archivo de Jin_Core, verifica que no aparezca en la sección "En progreso" del otro IDE. En los demás repos basta con respetar el owner primario.
 - Si detectas colisión: **detente**, escribe al owner, negocia.
 
 ---
@@ -218,7 +218,7 @@ Cambia de Antigravity a Claude Code si:
 
 ### 7.1 Nunca editar simultáneamente
 
-Nunca dos IDEs sobre el mismo archivo. Punto. Aunque estén "cerca en tiempo" (uno lo terminó hace 5 minutos), verifica que el push esté hecho y el otro IDE haya hecho pull antes de tocar. Solo aplica de facto a Yormun_Core; en el resto lo previene el ownership por repo.
+Nunca dos IDEs sobre el mismo archivo. Punto. Aunque estén "cerca en tiempo" (uno lo terminó hace 5 minutos), verifica que el push esté hecho y el otro IDE haya hecho pull antes de tocar. Solo aplica de facto a Jin_Core; en el resto lo previene el ownership por repo.
 
 ### 7.2 Regla del "reciente"
 
@@ -273,14 +273,14 @@ Solo el owner del repo productor cambia su API. El consumidor **regenera**, jam�
 
 Ejemplo: añadir integración con Notion.
 
-1. **Antigravity** (Gemini 3.5 Flash), en Yormun_Core: scaffolding.
+1. **Antigravity** (Gemini 3.5 Flash), en Jin_Core: scaffolding.
    - Crea `src/integrations/notion/`.
    - Instala SDK (ping al owner por la dependencia nueva).
    - Boilerplate del módulo NestJS con DTOs anotados para OpenAPI.
    - Escribe integration tests con testcontainers.
    - PR abierto, STATUS.md actualizado.
 
-2. **Claude Code** (Sonnet 5), en Yormun_Core: tools + HITL.
+2. **Claude Code** (Sonnet 5), en Jin_Core: tools + HITL.
    - Lee el trabajo de Antigravity.
    - Declara tools en `src/tools/registry.ts` con `hitlLevel`.
    - Añade tests para el clasificador HITL cubriendo las nuevas tools.
@@ -293,7 +293,7 @@ Ejemplo: añadir integración con Notion.
 
 Ejemplo: reforzar el sanitizer de prompt injection.
 
-- Solo Claude Code, en Yormun_Core. Rama `feature/claude/sanitizer-hardening`.
+- Solo Claude Code, en Jin_Core. Rama `feature/claude/sanitizer-hardening`.
 - STATUS.md declara los archivos bloqueados.
 - Antigravity, si está corriendo, no toca `src/security/**`.
 
@@ -301,7 +301,7 @@ Ejemplo: reforzar el sanitizer de prompt injection.
 
 Ejemplo: añadir un HorizontalPodAutoscaler para core.
 
-- Solo Antigravity, en Yormun_Infra. Rama `feature/antigravity/hpa`.
+- Solo Antigravity, en Jin_Infra. Rama `feature/antigravity/hpa`.
 - Cero riesgo de colisión: es su repo.
 
 ---
@@ -315,4 +315,4 @@ Cada mes, revisa:
 - **Breaking changes de contrato no anunciados:** deben ser 0. Si aparece uno, el protocolo 3.4 falló — revisa por qué.
 - **Bugs por área:** si un área tiene muchos bugs, considera cambiar el IDE que la lidera.
 
-Documenta ajustes en un ADR (`Yormun_Docs/docs/adr/`) y actualiza `WORKFLOW.md`.
+Documenta ajustes en un ADR (`Jin_Docs/docs/adr/`) y actualiza `WORKFLOW.md`.

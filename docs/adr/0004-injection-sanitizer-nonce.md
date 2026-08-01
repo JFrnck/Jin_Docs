@@ -10,7 +10,7 @@ Un wrapper genérico sin nonce (`<untrusted_content source="...">...</untrusted_
 
 ## Decisión
 
-1. **Cada sesión de agente genera un nonce de 16 caracteres hexadecimales** vía `generateSessionNonce()` (`Yormun_Core/src/security/injection-sanitizer.ts`), usando `randomBytes(8).toString('hex')` — 8 bytes producen exactamente 16 caracteres hex; `randomBytes(16)` habría producido 32, incumpliendo la especificación de `AGENTS.md` §5.1.
+1. **Cada sesión de agente genera un nonce de 16 caracteres hexadecimales** vía `generateSessionNonce()` (`Jin_Core/src/security/injection-sanitizer.ts`), usando `randomBytes(8).toString('hex')` — 8 bytes producen exactamente 16 caracteres hex; `randomBytes(16)` habría producido 32, incumpliendo la especificación de `AGENTS.md` §5.1.
 
 2. **`wrapUntrustedContent(content, source, sessionNonce)` envuelve el contenido en `<untrusted_content_{sessionNonce} source="{source}">...</untrusted_content_{sessionNonce}>`.** El nonce forma parte del nombre del tag, no solo de un atributo — un atacante que inyecte `</untrusted_content_{sessionNonce}>` sin conocer el nonce exacto de la sesión activa no puede cerrar el tag real. La función:
    - Valida que `sessionNonce` matchee `/^[0-9a-f]{16}$/`; si no, lanza `InvalidSessionNonceError` (fail-safe: mejor fallar ruidosamente que envolver con un tag que el system prompt no reconocería como confiable).
