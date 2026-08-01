@@ -8,21 +8,10 @@
 
 ### Claude Code
 
-- **Repo:** Jin_Core
-- **Rama:** `feature/claude/agent-orchestration` — [PR #15](https://github.com/JFrnck/Jin_Core/pull/15)
-- **Descripción:** Fase 5.4 — Orquestación multi-agente: `OrchestratorService` descompone un objetivo en tickets del task ledger (Postgres) y los delega a sub-agentes (instancias adicionales de `AgentService.runTurn()`, Fase 5.1) que corren en paralelo por lotes de dependencias. Ver detalle técnico abajo y ADR 0005.
-- **Estado:** 🟢 PR #15 abierto, mergeable, CI verde (`build` & `GitGuardian` ambos en `pass`, verificado con `gh pr checks` real). 284/284 unitarios + 59/59 integración (Postgres real) pasados.
-- **Detalle de implementación:**
-  - 3 tablas nuevas (`agent_orchestration_runs`, `agent_tickets`, `agent_ticket_comments`) — migración `0004_agent_ledger` (numeración real de `main`; ver nota de coordinación abajo).
-  - Descomposición y reconciliación vía LLM (`reasoning_heavy`, Opus 4.8 por defecto), mismo patrón LLM+Zod que `ConsolidationService` (Fase 4.3).
-  - Conflictos de bajo riesgo entre sub-agentes se resuelven en modo-auto (comentario de resolución registrado); conflictos materiales escalan al owner reusando el HITL/Telegram existente vía tool sintética `resolveAgentConflict` (`confirm`) — sin canal de escalamiento nuevo.
-  - `mergeAgentBranch` declarada como guardrail (PROMPTS.md §5.4) con executor 501 documentado (`AgentBranchMergeNotImplementedError`): hoy ninguna tool le da a un sub-agente la capacidad de producir una branch de código real. Handoff explícito, no silencioso.
-  - Kill switch a mitad de un run corta TODO (chequeo antes de cada lote + `KillSwitchActiveError` real propagada).
-  - Cambios mínimos/retrocompatibles a Fase 5.1: `AgentTurnInput` gana `allowedTools?`/`actorLabel?` opcionales; `BudgetService` gana `getSessionUsage()` público.
-  - Bug real encontrado y corregido durante el smoke test de `AppModule` completo (env vars fake, no solo `tsc`/`test`/`test:integration`): `AGENT_CONFIG` no estaba exportado desde `AgentModule`, `OrchestratorModule` no podía resolverlo — Nest lo hubiera reventado recién al bootstrapear en real. Corregido exportando el token.
-  - ADR 0005 escrito (`docs/adr/0005-multi-agent-orchestration.md`).
-- **Nota de coordinación — numeración de migración:** esta rama parte de `main` (sin el PR #14 de Antigravity, Fase 5.3, todavía sin mergear), así que la migración nueva es `0004_agent_ledger` — el mismo número que `0004_telegram_sessions` de PR #14. Cualquiera de los dos PRs que se mergee segundo debe renombrar su migración a `0005_*` y actualizar `drizzle/meta/_journal.json` antes o al mergear (mismo tipo de coordinación que ya documentó el incidente de Jin_Infra #2/#3).
-- **Próximo:** ninguno activo — Fase 5.5 (pods de servicio) queda libre para arrancar; Fase 6.1 (auth + API) desbloqueada tras 5.4.
+- **Repo:** ninguno activo ahora mismo.
+- **Descripción:** Fase 5.4 (orquestación multi-agente) completa — [PR #15](https://github.com/JFrnck/Jin_Core/pull/15), **mergeado**. Ver sección dedicada abajo y ADR 0005.
+- **Próximo:** Fase 5.5 (pods de servicio), arrancando ahora.
+- **⚠️ Coordinación pendiente para PR #14 (Antigravity, Fase 5.3):** PR #15 mergeó primero con la migración `0004_agent_ledger` ya en `main`. PR #14 (`0004_telegram_sessions`) todavía sin mergear tiene el mismo número — Antigravity debe renombrar su migración a `0005_telegram_sessions` (archivo + entrada en `drizzle/meta/_journal.json`) antes de mergear, o el merge va a chocar. Mismo tipo de ajuste que ya documentó el incidente de Jin_Infra #2/#3.
 
 ### Antigravity
 
@@ -134,6 +123,7 @@ Lo que el plan sí acierta: los 3 niveles HITL coinciden con blueprint/PROMPTS, 
 | Jin_Core | [#11](https://github.com/JFrnck/Jin_Core/pull/11) | Fase 5.1: agent loop con tool-calling, plan-and-solve y self-correction | ✅ mergeado |
 | Jin_Executor | [#3](https://github.com/JFrnck/Jin_Executor/pull/3) | Fase 5.2: `ModalService` real (sandbox Python/pandas) + ruteo local/remoto por `language` | ✅ mergeado |
 | Jin_Core | [#12](https://github.com/JFrnck/Jin_Core/pull/12) | Fase 5.2: tool `runCode` en registry + `src/executor-client/` (cierra el loop con el Executor) | ✅ mergeado |
+| Jin_Core | [#15](https://github.com/JFrnck/Jin_Core/pull/15) | Fase 5.4: orquestación multi-agente (task ledger persistido, `OrchestratorService`) | ✅ mergeado |
 
 **Nota — Jin_Infra #2 se reemplazó por #3:** al mergear #1 con `--delete-branch`, GitHub cerró automáticamente #2 porque su rama base (`feature/claude/infra-base`, la de #1) dejó de existir — efecto colateral no documentado de GitHub en PRs apilados, no una acción intencional. Un PR cerrado así no se puede reabrir ni re-apuntar vía API una vez cerrado. Recuperado abriendo #3 desde la misma rama head (`feature/claude/infra-backups`, intacta) directo contra `main`; contenido idéntico (26 archivos, 1128 inserciones), CI verde, mergeado normalmente.
 
@@ -227,6 +217,28 @@ Dependencias: 5.1 → (5.2, 5.3, 5.4) → 5.5 (tras 5.2) → 6.1 → (6.2, 6.3, 
 **Criterio de éxito cerrado:** turno del agente "analiza este CSV con pandas" → LLM invoca `runCode({code, language: 'python'})` → clasifica `confirm` → pending approval → owner aprueba por Telegram → `ApprovalExecutionService` → `ToolExecutorRegistry` → `ExecutorClientService` → Executor real → Modal → resultado (stdout/stderr) sanitizado con `wrapUntrustedContent` (ya lo hace el agent loop para todo resultado de tool, Fase 5.1) vuelve al chat.
 
 **Fuera de alcance, documentado:** `runCode` con TypeScript local ya funcionaba desde Fase 2.3 (pod Deno) — esta fase solo conecta a Core y agrega el tier Modal. No hay preview services de larga vida todavía (eso es Fase 5.5, ahora desbloqueada).
+
+## Fase 5.4 — resumen técnico (Jin_Core PR #15, mergeado 2026-08-01)
+
+Orquestación multi-agente (BLUEPRINT §6/§9, requisito del owner 2026-07-25, ADR 0005). Extiende el agent loop de Fase 5.1 sin reescribirlo: un sub-agente es una instancia más de `AgentService.runTurn()`, no una clase nueva.
+
+**`OrchestratorService.runObjective()`:** crea un run en el ledger, descompone el objetivo en tickets vía LLM (`TicketDecompositionService`, TaskProfile `reasoning_heavy`), corre lotes de tickets listos (dependencias resueltas) con `Promise.all` en chunks de `max_concurrent_sub_agents` (config, default 3), y cierra con una pasada de reconciliación (`ReconciliationService`, mismo TaskProfile) que redacta la respuesta final y detecta contradicciones entre sub-agentes.
+
+**Ledger persistido:** 3 tablas nuevas (`agent_orchestration_runs`/`agent_tickets`/`agent_ticket_comments`, migración `0004_agent_ledger`) — sobrevive restarts, mismo criterio que `pending_approvals`. `LedgerRepository` es el único punto de acceso.
+
+**Escalera de decisión:** conflicto de bajo riesgo → el orquestador lo resuelve en modo-auto (comentario `resolution` con el porqué); conflicto material → tool sintética `resolveAgentConflict` (`hitlLevel: 'confirm'`) crea una pending approval real, reusando el HITL/Telegram existente sin canal nuevo.
+
+**Presupuesto:** cada sub-agente corre con `sessionId = {runId}:{ticketId}` (techo de sesión propio, sin poder evadir los topes globales diario/horario/kill-switch). `BudgetService.getSessionUsage()` (nuevo, público) permite sumar el consumo real del turno completo.
+
+**Board causal:** un sub-agente ve, al arrancar, el resultado de tickets ya `done` de lotes anteriores (inyectado como par sintético `user`/`assistant`, mismo mecanismo que la memoria de Fase 5.3) — nunca de tickets corriendo en el mismo lote en paralelo. Esa limitación es deliberada: las contradicciones entre pares del mismo lote se detectan recién en la reconciliación final, no a mitad de vuelo.
+
+**Cambios retrocompatibles a `src/agent/agent.service.ts` (Fase 5.1):** `AgentTurnInput` gana `allowedTools?`/`actorLabel?` opcionales — ausentes, el comportamiento es idéntico al de antes de esta fase (todos los tests de Fase 5.1/5.3 preexistentes siguen pasando sin tocarlos).
+
+**Bug real encontrado en el smoke test de `AppModule` completo** (no solo `tsc`/`test`/`test:integration`, que no lo detectaron): `AGENT_CONFIG` no estaba exportado desde `AgentModule` — `OrchestratorModule` no podía resolverlo, hubiera reventado recién al bootstrapear en real. Corregido exportando el token además de `AgentService`.
+
+**Fuera de alcance, documentado (ADR 0005 punto 9):** `mergeAgentBranch` está declarada (`hitlLevel: 'confirm'`, guardrail exigido por PROMPTS.md) pero su executor lanza `AgentBranchMergeNotImplementedError` (501) — hoy ninguna tool le da a un sub-agente la capacidad de producir una branch de código real. Se activa cuando exista una tool de edición de código.
+
+**Tests:** 284 unitarios + 59 de integración (Postgres real vía testcontainers) en el repo tras el merge, cubriendo los 6 escenarios exigidos por PROMPTS.md §5.4 (orden por dependencias, paralelismo real, conflicto material dispara pending approval, un `confirm` no bloquea tareas independientes, kill switch corta todo el run, presupuesto agregado = suma de sub-agentes) más el camino de conflicto de bajo riesgo y el de un ticket que falla.
 
 ## Fase 4.3 — resumen técnico (Jin_Core PR #10, mergeado 2026-07-25)
 
@@ -330,6 +342,7 @@ También corregido de paso: glob patterns rotos en `lint`/`format`, y `package.j
 
 ## Recientemente completado (últimos 7 días)
 
+- 2026-08-01: [Jin_Core] [PR #15](https://github.com/JFrnck/Jin_Core/pull/15) mergeado — Fase 5.4 completa: orquestación multi-agente (`OrchestratorService`, task ledger persistido en Postgres, escalera de decisión bajo-riesgo/material vía HITL existente, kill switch corta todo el run, presupuesto agregado vía `BudgetService.getSessionUsage()` nuevo). ADR 0005 escrito. 284 unitarios + 59 integración (Postgres real) en verde, CI verificado con `gh pr checks` real. Bug de wiring (`AGENT_CONFIG` no exportado) encontrado y corregido en un smoke test de `AppModule` completo antes de abrir el PR. Ver sección dedicada arriba. **Pendiente:** PR #14 (Antigravity, Fase 5.3) debe renumerar su migración `0004_telegram_sessions` a `0005_*` antes de mergear (colisión de numeración, ver nota en "En progreso").
 - 2026-07-31: **Rename global Yormun/Yormungander → Jin, completo en los 6 repos.** PRs mergeados con CI verde: [Core #13](https://github.com/JFrnck/Jin_Core/pull/13), [Executor #4](https://github.com/JFrnck/Jin_Executor/pull/4), [Infra #5](https://github.com/JFrnck/Jin_Infra/pull/5), [Web #2](https://github.com/JFrnck/Jin_Web/pull/2), [CLI #2](https://github.com/JFrnck/Jin_CLI/pull/2), más el commit de docs `56b3eb5`. Incluye paquetes (`jin-core`, `jin-executor`, y de paso `jin-web`/`jin-cli`, saldando la deuda de `temp-*` pendiente desde la Fase 2.1), clase base de errores `JinError` (+ `JinErrorFilter`), namespaces de K8s (`jin`, `jin-executor`), imagen de Modal `jin-data-science`, bucket R2 `jin-backups`, lock advisory de la audit chain, y el remapeo de dominios a `jin.jeanfranck.com` + `jinserver.com`. Los 6 repos renombrados en GitHub (`Jin_*`) y las carpetas locales bajo `Jin/`; GitHub redirige las URLs viejas con 301, así que los links a PRs anteriores de este archivo siguen funcionando (verificado con `curl`). **Verificación del aislamiento**, que era el riesgo real del cambio de namespaces: `kubectl kustomize` renderiza los 60 recursos, los 4 namespaces se declaran, las 12 NetworkPolicies apuntan a namespaces existentes y los `namespaceSelector` resuelven — más el test de integración contra K3s real, que sigue probando que un pod en `agents-sandbox` no alcanza un servicio en `jin`. Un rename a medias ahí habría roto el aislamiento en silencio, sin fallar ruidosamente.
 - 2026-07-25: [Jin_Executor] [PR #3](https://github.com/JFrnck/Jin_Executor/pull/3) mergeado + [Jin_Core] [PR #12](https://github.com/JFrnck/Jin_Core/pull/12) mergeado — Fase 5.2 completa en ambos repos: `ModalService` real (SDK `modal@0.9.0`, sandbox Python/pandas con imagen cacheada de forma lazy), ruteo local/remoto automático por `language` (reemplaza el `remote: boolean` placeholder de Fase 2.3), tool `runCode` declarada en `registry.ts` (confirm, sin `env` expuesto al LLM) y `src/executor-client/` nuevo conectando el agent loop al Executor real. 51 tests nuevos entre ambos repos (42 unitarios + 2 integración K3s real + 5 e2e en Executor; 258 unitarios + 43 integración Postgres real + 1 e2e en Core tras el merge), CI verde verificado con `gh pr checks` en ambos. Ver sección dedicada abajo.
 - 2026-07-24: [Jin_Core] [PR #7](https://github.com/JFrnck/Jin_Core/pull/7) mergeado — prerequisito de Fase 4.2: 4 tools de Calendar declaradas en `registry.ts` (`listCalendarEvents` auto, `updateCalendarEvent` notify, `deleteCalendarEventPast` notify, `deleteCalendarEventFuture` confirm). Matriz HITL actualizada a 10 tools, 100% cobertura.
