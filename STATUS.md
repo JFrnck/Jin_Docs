@@ -1,6 +1,6 @@
 # STATUS
 
-## Última actualización: 2026-08-01 (America/Lima) — actualización 15
+## Última actualización: 2026-08-01 (America/Lima) — actualización 17
 
 > **Antigravity ya está activo** (ver abajo, Fase 3.1/2.4/4.2). Retoma ownership normal de `docs/WORKFLOW.md` sección 2 — Claude Code ya no asume tareas `[ANTIGRAVITY]` por defecto, salvo negociación puntual vía esta misma nota.
 
@@ -8,9 +8,30 @@
 
 ### Claude Code
 
-- **Repo:** ninguno activo ahora mismo.
-- **Descripción:** Fase 5.5 (pods de servicio) completa — [Jin_Executor PR #5](https://github.com/JFrnck/Jin_Executor/pull/5), [Jin_Core PR #16](https://github.com/JFrnck/Jin_Core/pull/16), [Jin_Infra PR #6](https://github.com/JFrnck/Jin_Infra/pull/6), **los 3 mergeados**. Ver sección dedicada abajo y ADR 0006. Además, revisó y mergeó [PR #14](https://github.com/JFrnck/Jin_Core/pull/14) (Antigravity, Fase 5.3) — ver detalle abajo en la sección de Antigravity.
-- **Próximo:** ninguno activo — Fase 6.1 (auth + API REST/WebSocket) desbloqueada tras 5.4/5.5.
+- **Repo:** [Jin_Core] — rama `feature/claude/auth-api`, [PR #17](https://github.com/JFrnck/Jin_Core/pull/17) **abierto**, `gh pr checks` real en verde (`build` 2m18s, GitGuardian pass). Pendiente de revisión/merge del owner.
+- **Descripción:** Fase 6.1 (Auth JWT + API REST/WebSocket) **implementación completa, verificada localmente y en CI 2026-08-01.** Plan completo en `~/.claude/plans/vivid-munching-cascade.md`. ADR 0007 escrito en `docs/adr/0007-auth-jwt-api.md`.
+  - **Hecho — todo lo del plan original, sin pendientes técnicos:**
+    - Dependencias instaladas (`@nestjs/jwt`, `argon2`, `@nestjs/throttler`, `ioredis`, `@nestjs/event-emitter`, `@nestjs/websockets`, `@nestjs/platform-socket.io`, `socket.io`, `cookie-parser` + tipos).
+    - `src/config/env.schema.ts`: `OWNER_PASSWORD_HASH`, `JWT_SECRET` (`.min(32)`), `REDIS_URL` — las 3 requeridas, fail-fast.
+    - `src/common/filters/jin-error.filter.ts` (+ spec) registrado como `APP_FILTER` global en `app.module.ts`.
+    - `src/common/pipes/zod-validation.pipe.ts`: pipe genérico Zod para bodies.
+    - `src/auth/` completo (`auth.module.ts`, `auth.service.ts` + spec, `auth.controller.ts`, `jwt-auth.guard.ts` + spec, `public.decorator.ts`, `errors.ts`), registrado como `APP_GUARD` global en `app.module.ts` (orden: `ThrottlerGuard` antes que `JwtAuthGuard`, comentado en el código).
+    - `scripts/hash-password.ts` + script `hash-password` en `package.json`.
+    - `src/rate-limit/` (`redis-throttler-storage.service.ts` + módulo) importado en `app.module.ts`.
+    - `src/hitl/dual-confirm.service.ts`: `listPending()` + emit de `EventEmitter2` en `createPendingApproval()`.
+    - `AuditService.listRecent({limit, cursor})`.
+    - Controllers de dominio: `src/hitl/hitl.controller.ts`, `src/audit/audit.controller.ts`, `src/budget/budget.controller.ts`, `src/memory/memory.controller.ts` (+ specs).
+    - `src/chat/` (`chat.controller.ts` `POST /api/chat`, `chat.gateway.ts` Socket.IO).
+    - `src/realtime/` (`realtime.gateway.ts`: `pending-approval:new` event-driven, `budget:alert`/`kill-switch:activated` por `@Cron`; `ws-jwt.guard.ts`).
+    - `main.ts`: Swagger UI movido a `/docs`, `.addBearerAuth()`, `cookie-parser` registrado.
+    - `app.module.ts`: `AuthModule`/`RateLimitModule`/`RealtimeModule`/`ChatModule` importados, `EventEmitterModule.forRoot()`, `APP_GUARD`/`APP_FILTER` globales registrados.
+    - `src/telegram/telegram-webhook.controller.ts`: `@Public()`.
+    - `test/support/redis-testcontainer.ts` (mismo patrón que `postgres-testcontainer.ts`).
+    - `.github/workflows/ci.yml`: `OWNER_PASSWORD_HASH`/`JWT_SECRET`/`REDIS_URL` fake agregados al job.
+  - **Verificación local 2026-08-01 (todo en verde):** `tsc --noEmit -p tsconfig.json` sin errores; `pnpm lint` verde (324 tests unitarios en 53 archivos); `pnpm test:integration` verde (61 tests, Postgres+Redis reales vía testcontainers); `pnpm build` limpio; `pnpm run generate:contract` regenerado — diff puramente aditivo (188 líneas: `/api/auth/*`, `/api/chat`, `/api/hitl/*`, `/api/audit`, `/api/budget/*`, `/api/memory/recall`), commiteado junto con el resto pendiente.
+  - **Nota de proceso:** `pnpm lint`/`generate:contract` requirieron `NODE_OPTIONS=--max-old-space-size=8192` en esta máquina local (heap default insuficiente para el type-aware lint de todo el repo) — no es un problema del código, confirmar si CI necesita el mismo ajuste o si el runner de GitHub Actions ya tiene memoria suficiente por defecto.
+  - **Falta antes de dar la fase por cerrada:** revisión y merge del owner del [PR #17](https://github.com/JFrnck/Jin_Core/pull/17); recién entonces actualizar esta sección a "mergeado".
+- **Próximo:** owner revisa [PR #17](https://github.com/JFrnck/Jin_Core/pull/17) de Jin_Core; tras mergear, Fase 6.2 (Antigravity, Web Dashboard) queda desbloqueada.
 
 ### Antigravity
 
@@ -178,7 +199,7 @@ Los `"name": "temp-*"` de `package.json` en Web y CLI ya no aplican como pendien
 13. **Fase 5.3** [Antigravity] — ✅ hecho, [PR #14](https://github.com/JFrnck/Jin_Core/pull/14) Jin_Core (sesiones reales en Telegram: agent loop + memoria). Ver sección dedicada arriba.
 14. **Fase 5.4** [Claude Code] — ✅ hecho, [PR #15](https://github.com/JFrnck/Jin_Core/pull/15) Jin_Core (orquestación multi-agente: sub-agentes coordinados vía task ledger estilo Jira persistido en Postgres). ADR 0005. Ver sección dedicada arriba.
 15. **Fase 5.5** [Claude Code] — ✅ hecho, [Jin_Executor PR #5](https://github.com/JFrnck/Jin_Executor/pull/5) + [Jin_Core PR #16](https://github.com/JFrnck/Jin_Core/pull/16) + [Jin_Infra PR #6](https://github.com/JFrnck/Jin_Infra/pull/6) (pods de servicio: preview apps con puertos expuestos bajo `*.jinserver.com`, TTL obligatorio). ADR 0006. Ver sección dedicada arriba.
-16. **Fase 6.1** [Claude Code] — Auth JWT single-user + API REST/WebSocket para interfaces (Jin_Core).
+16. **Fase 6.1** [Claude Code] — Auth JWT single-user + API REST/WebSocket para interfaces (Jin_Core). Implementación completa, verificada localmente (ver sección "En progreso"), pendiente de commit/PR.
 17. **Fase 6.2** [Antigravity] — Web Dashboard MVP (Jin_Web — hoy es el template sin tocar).
 18. **Fase 6.3** [Antigravity] — Monaco + Zone Widgets + applets (Jin_Web).
 19. **Fase 6.4** [Antigravity] — CLI con Ink (Jin_CLI — hoy es el template sin tocar).
