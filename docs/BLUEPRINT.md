@@ -355,6 +355,18 @@ Ver `AGENTS.md` sección "Seguridad" para las reglas duras. Resumen:
 - **Applets:** iframes con `sandbox="allow-scripts"` cargando subdominios `app-{uuid}.jinserver.com` (cross-origin por diseño, ver 5.2).
 - **Comunicación con backend:** REST para comandos, WebSocket para eventos en tiempo real (progreso de tareas, aprobaciones pendientes). Tipos generados desde el OpenAPI de core.
 
+#### 8.1.1 PWA (decisión del owner, 2026-08-02)
+
+El dashboard se instala como PWA en el móvil del owner. El motivo no es offline — es que **aprobar desde el móvil hoy solo se puede por Telegram**, y una app en la pantalla de inicio (con push a futuro) es el camino natural para que el dashboard cubra ese caso sin depender del bot.
+
+Tres reglas duras, porque un PWA mal configurado degrada la seguridad del sistema:
+
+1. **El service worker jamás cachea `/api/*`.** Solo el app shell (HTML, JS, CSS, íconos). Un `runtimeCaching` genérico tipo Workbox persistiría aprobaciones pendientes, payloads de correos y el audit log en `CacheStorage` — datos sensibles escritos a disco que **sobreviven al logout**, porque borrar la cookie no borra el cache. La sesión debe poder terminarse de verdad.
+2. **Offline es solo lectura degradada. Prohibido encolar mutaciones.** Nada de background sync para aprobar/rechazar: una aprobación emitida offline y sincronizada tres horas después aprueba una acción cuyo estado ya cambió, o cuyo TTL de 24 h (9.4) ya venció. El HITL asume decisión *presente* sobre estado *presente*. La UI bloquea explícitamente aprobar/rechazar sin conexión — es un requisito, no una limitación técnica.
+3. **Un service worker por origen, y el origen es el confiable.** El SW vive en `jin.jeanfranck.com` y jamás se registra desde contenido de agentes. Esto ya lo garantiza 5.2 (las previews viven en otro dominio registrable), y es exactamente el ataque que 5.2 describe: un service worker con scope sobre el origen de la sesión intercepta cada petición que se hace desde ahí.
+
+**Notificaciones push: fuera de alcance hasta que exista soporte en `jin-core`.** Requiere VAPID keys, persistir suscripciones y lógica de envío — nada de eso está construido. Cuando se implemente, es el reemplazo natural del canal de aprobación de Telegram, no un duplicado más.
+
 ### 8.2 Telegram Bot
 
 - grammY con webhook (no polling) para bajo consumo. Módulo interno de jin-core.
