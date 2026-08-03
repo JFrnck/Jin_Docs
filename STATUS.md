@@ -1,42 +1,15 @@
 # STATUS
 
-## Última actualización: 2026-08-01 (America/Lima) — actualización 17
+## Última actualización: 2026-08-02 (America/Lima) — actualización 18
 
-> **Punto de retomada de la sesión de Claude Code (cortada al final del 2026-08-01):** Fase 6.1 (Jin_Core) quedó con la implementación **completa y verificada** (tsc/lint/324 tests unitarios/61 integración/build/contrato — todo en verde) y con **[PR #17](https://github.com/JFrnck/Jin_Core/pull/17) abierto, CI real en verde**, sin nada uncommiteado en ningún repo (`Jin_Core` en `feature/claude/auth-api`, `Jin_Docs` en `main`). **No hay ningún trabajo perdido ni a medias que retomar técnicamente.** Lo único pendiente es una acción del owner:
-> 1. Revisar y mergear (o pedir cambios en) el [PR #17](https://github.com/JFrnck/Jin_Core/pull/17).
-> 2. Al mergear, actualizar la sección "En progreso → Claude Code" de abajo a "✅ hecho" (mover el detalle a una sección "Fase 6.1 — resumen técnico" como las demás fases) y mover el PR a la tabla de "Pull Requests — todos mergeados a main".
-> 3. Después de mergear, Fase 6.2 (Web Dashboard, Antigravity) y 6.4 (CLI, Antigravity) quedan desbloqueadas — nada bloquea a Claude Code hasta entonces salvo que el owner pida cambios en el PR.
->
 > **Antigravity ya está activo** (ver abajo, Fase 3.1/2.4/4.2). Retoma ownership normal de `docs/WORKFLOW.md` sección 2 — Claude Code ya no asume tareas `[ANTIGRAVITY]` por defecto, salvo negociación puntual vía esta misma nota.
 
 ## En progreso
 
 ### Claude Code
 
-- **Repo:** [Jin_Core] — rama `feature/claude/auth-api`, [PR #17](https://github.com/JFrnck/Jin_Core/pull/17) **abierto**, `gh pr checks` real en verde (`build` 2m18s, GitGuardian pass). Pendiente de revisión/merge del owner.
-- **Descripción:** Fase 6.1 (Auth JWT + API REST/WebSocket) **implementación completa, verificada localmente y en CI 2026-08-01.** Plan completo en `~/.claude/plans/vivid-munching-cascade.md`. ADR 0007 escrito en `docs/adr/0007-auth-jwt-api.md`.
-  - **Hecho — todo lo del plan original, sin pendientes técnicos:**
-    - Dependencias instaladas (`@nestjs/jwt`, `argon2`, `@nestjs/throttler`, `ioredis`, `@nestjs/event-emitter`, `@nestjs/websockets`, `@nestjs/platform-socket.io`, `socket.io`, `cookie-parser` + tipos).
-    - `src/config/env.schema.ts`: `OWNER_PASSWORD_HASH`, `JWT_SECRET` (`.min(32)`), `REDIS_URL` — las 3 requeridas, fail-fast.
-    - `src/common/filters/jin-error.filter.ts` (+ spec) registrado como `APP_FILTER` global en `app.module.ts`.
-    - `src/common/pipes/zod-validation.pipe.ts`: pipe genérico Zod para bodies.
-    - `src/auth/` completo (`auth.module.ts`, `auth.service.ts` + spec, `auth.controller.ts`, `jwt-auth.guard.ts` + spec, `public.decorator.ts`, `errors.ts`), registrado como `APP_GUARD` global en `app.module.ts` (orden: `ThrottlerGuard` antes que `JwtAuthGuard`, comentado en el código).
-    - `scripts/hash-password.ts` + script `hash-password` en `package.json`.
-    - `src/rate-limit/` (`redis-throttler-storage.service.ts` + módulo) importado en `app.module.ts`.
-    - `src/hitl/dual-confirm.service.ts`: `listPending()` + emit de `EventEmitter2` en `createPendingApproval()`.
-    - `AuditService.listRecent({limit, cursor})`.
-    - Controllers de dominio: `src/hitl/hitl.controller.ts`, `src/audit/audit.controller.ts`, `src/budget/budget.controller.ts`, `src/memory/memory.controller.ts` (+ specs).
-    - `src/chat/` (`chat.controller.ts` `POST /api/chat`, `chat.gateway.ts` Socket.IO).
-    - `src/realtime/` (`realtime.gateway.ts`: `pending-approval:new` event-driven, `budget:alert`/`kill-switch:activated` por `@Cron`; `ws-jwt.guard.ts`).
-    - `main.ts`: Swagger UI movido a `/docs`, `.addBearerAuth()`, `cookie-parser` registrado.
-    - `app.module.ts`: `AuthModule`/`RateLimitModule`/`RealtimeModule`/`ChatModule` importados, `EventEmitterModule.forRoot()`, `APP_GUARD`/`APP_FILTER` globales registrados.
-    - `src/telegram/telegram-webhook.controller.ts`: `@Public()`.
-    - `test/support/redis-testcontainer.ts` (mismo patrón que `postgres-testcontainer.ts`).
-    - `.github/workflows/ci.yml`: `OWNER_PASSWORD_HASH`/`JWT_SECRET`/`REDIS_URL` fake agregados al job.
-  - **Verificación local 2026-08-01 (todo en verde):** `tsc --noEmit -p tsconfig.json` sin errores; `pnpm lint` verde (324 tests unitarios en 53 archivos); `pnpm test:integration` verde (61 tests, Postgres+Redis reales vía testcontainers); `pnpm build` limpio; `pnpm run generate:contract` regenerado — diff puramente aditivo (188 líneas: `/api/auth/*`, `/api/chat`, `/api/hitl/*`, `/api/audit`, `/api/budget/*`, `/api/memory/recall`), commiteado junto con el resto pendiente.
-  - **Nota de proceso:** `pnpm lint`/`generate:contract` requirieron `NODE_OPTIONS=--max-old-space-size=8192` en esta máquina local (heap default insuficiente para el type-aware lint de todo el repo) — no es un problema del código, confirmar si CI necesita el mismo ajuste o si el runner de GitHub Actions ya tiene memoria suficiente por defecto.
-  - **Falta antes de dar la fase por cerrada:** revisión y merge del owner del [PR #17](https://github.com/JFrnck/Jin_Core/pull/17); recién entonces actualizar esta sección a "mergeado".
-- **Próximo:** owner revisa [PR #17](https://github.com/JFrnck/Jin_Core/pull/17) de Jin_Core; tras mergear, Fase 6.2 (Antigravity, Web Dashboard) queda desbloqueada.
+- **Repo:** ninguno activo ahora mismo. Fase 6.1 (Jin_Core) mergeada — ver sección dedicada abajo.
+- **Próximo:** ninguna tarea propia bloqueada por el owner. Fase 6.2 (Web Dashboard, Antigravity) y 6.4 (CLI, Antigravity) quedan desbloqueadas por el merge de Fase 6.1. Claude Code retoma cuando el owner priorice Fase 7.x (runbook de activación / hardening) o pida revisión del trabajo de Antigravity en 6.2-6.4.
 
 ### Antigravity
 
@@ -148,6 +121,7 @@ Lo que el plan sí acierta: los 3 niveles HITL coinciden con blueprint/PROMPTS, 
 | Jin_Executor | [#5](https://github.com/JFrnck/Jin_Executor/pull/5) | Fase 5.5: `PreviewServiceLifecycleService`, pods de servicio bajo `*.jinserver.com` | ✅ mergeado |
 | Jin_Core | [#16](https://github.com/JFrnck/Jin_Core/pull/16) | Fase 5.5: tools `startPreviewService`/`stopPreviewService`/`listPreviewServices` | ✅ mergeado |
 | Jin_Infra | [#6](https://github.com/JFrnck/Jin_Infra/pull/6) | Fase 5.5: RBAC + Certificate + PVC para pods de servicio | ✅ mergeado |
+| Jin_Core | [#17](https://github.com/JFrnck/Jin_Core/pull/17) | Fase 6.1: Auth JWT single-user + API REST/WebSocket | ✅ mergeado |
 
 **Nota — Jin_Infra #2 se reemplazó por #3:** al mergear #1 con `--delete-branch`, GitHub cerró automáticamente #2 porque su rama base (`feature/claude/infra-base`, la de #1) dejó de existir — efecto colateral no documentado de GitHub en PRs apilados, no una acción intencional. Un PR cerrado así no se puede reabrir ni re-apuntar vía API una vez cerrado. Recuperado abriendo #3 desde la misma rama head (`feature/claude/infra-backups`, intacta) directo contra `main`; contenido idéntico (26 archivos, 1128 inserciones), CI verde, mergeado normalmente.
 
@@ -204,7 +178,7 @@ Los `"name": "temp-*"` de `package.json` en Web y CLI ya no aplican como pendien
 13. **Fase 5.3** [Antigravity] — ✅ hecho, [PR #14](https://github.com/JFrnck/Jin_Core/pull/14) Jin_Core (sesiones reales en Telegram: agent loop + memoria). Ver sección dedicada arriba.
 14. **Fase 5.4** [Claude Code] — ✅ hecho, [PR #15](https://github.com/JFrnck/Jin_Core/pull/15) Jin_Core (orquestación multi-agente: sub-agentes coordinados vía task ledger estilo Jira persistido en Postgres). ADR 0005. Ver sección dedicada arriba.
 15. **Fase 5.5** [Claude Code] — ✅ hecho, [Jin_Executor PR #5](https://github.com/JFrnck/Jin_Executor/pull/5) + [Jin_Core PR #16](https://github.com/JFrnck/Jin_Core/pull/16) + [Jin_Infra PR #6](https://github.com/JFrnck/Jin_Infra/pull/6) (pods de servicio: preview apps con puertos expuestos bajo `*.jinserver.com`, TTL obligatorio). ADR 0006. Ver sección dedicada arriba.
-16. **Fase 6.1** [Claude Code] — Auth JWT single-user + API REST/WebSocket para interfaces (Jin_Core). Implementación completa, verificada localmente (ver sección "En progreso"), pendiente de commit/PR.
+16. **Fase 6.1** [Claude Code] — ✅ hecho, [PR #17](https://github.com/JFrnck/Jin_Core/pull/17) Jin_Core (Auth JWT single-user + API REST/WebSocket). ADR 0007. Ver sección dedicada arriba.
 17. **Fase 6.2** [Antigravity] — Web Dashboard MVP (Jin_Web — hoy es el template sin tocar).
 18. **Fase 6.3** [Antigravity] — Monaco + Zone Widgets + applets (Jin_Web).
 19. **Fase 6.4** [Antigravity] — CLI con Ink (Jin_CLI — hoy es el template sin tocar).
@@ -241,6 +215,32 @@ Dependencias: 5.1 → (5.2, 5.3, 5.4) → 5.5 (tras 5.2) → 6.1 → (6.2, 6.3, 
 **Criterio de éxito cerrado:** turno del agente "analiza este CSV con pandas" → LLM invoca `runCode({code, language: 'python'})` → clasifica `confirm` → pending approval → owner aprueba por Telegram → `ApprovalExecutionService` → `ToolExecutorRegistry` → `ExecutorClientService` → Executor real → Modal → resultado (stdout/stderr) sanitizado con `wrapUntrustedContent` (ya lo hace el agent loop para todo resultado de tool, Fase 5.1) vuelve al chat.
 
 **Fuera de alcance, documentado:** `runCode` con TypeScript local ya funcionaba desde Fase 2.3 (pod Deno) — esta fase solo conecta a Core y agrega el tier Modal. No hay preview services de larga vida todavía (eso es Fase 5.5, ahora desbloqueada).
+
+## Fase 6.1 — resumen técnico (Jin_Core PR #17, mergeado 2026-08-02)
+
+Auth JWT single-user + API REST/WebSocket (BLUEPRINT §4.1/§5.2), área de Claude Code. Cierra la dependencia que bloqueaba Fase 6.2 (Web Dashboard) y 6.4 (CLI): hasta ahora todo el sistema solo se veía por Telegram.
+
+**`src/auth/`:** `AuthService` (Argon2id vía `argon2.verify` contra `OWNER_PASSWORD_HASH`, firma JWT con `@nestjs/jwt`), `JwtAuthGuard` registrado como `APP_GUARD` global (protege todo por default), `@Public()` para el allowlist explícito (`/api/auth/login`, `/metrics`, `/telegram/webhook`, liveness check en `AppController`). Entrega dual: cookie `__Host-jin_session` (httpOnly/secure/sameSite=strict, sin `Domain`) para el Web, mismo token en el body de login para la CLI. Sin blocklist de logout en v1 (límite conocido, aceptado — ver ADR 0007 punto 2); logout solo borra la cookie cliente, expiry de 7 días acota el riesgo.
+
+**`JinErrorFilter`** (`src/common/filters/`), `APP_FILTER` global: traduce `JinError.httpStatus` a la respuesta HTTP real — prerequisito real encontrado durante la investigación (ningún controller existente lo necesitaba porque Telegram nunca propagaba `JinError` directo a una respuesta HTTP).
+
+**Rate limiting** (`src/rate-limit/`): primera vez que Jin_Core habla con Redis (ya desplegado en Jin_Infra, sin infra nueva). `@nestjs/throttler` + storage propio sobre `ioredis` (ventana fija, `INCR`+`EXPIRE` atómico vía Lua `EVAL` — decisión explícita de no implementar sliding window real, ver ADR 0007 punto 4). 60/min global, 5/15min en `/api/auth/login`.
+
+**Controllers de dominio** (dentro de cada módulo existente, no un módulo "api" genérico — AGENTS.md 4.2): `hitl.controller.ts` (`GET /api/hitl/pending`, `POST /api/hitl/:requestId/approve|reject`, delega en `ApprovalExecutionService` ya existente), `audit.controller.ts` (`GET /api/audit?cursor&limit`, nuevo `AuditService.listRecent()`), `budget.controller.ts` (`GET /api/budget`, `POST /api/budget/unpause`), `memory.controller.ts` (`POST /api/memory/recall`). `DualConfirmService` ganó `listPending()` + emit de `EventEmitter2` en `createPendingApproval()`.
+
+**`src/chat/`:** `POST /api/chat` + gateway WS delgado sobre `AgentService` ya existente, sin persistencia de sesión server-side (decisión deliberada — el caller gestiona su propio historial, a diferencia de Telegram).
+
+**`src/realtime/`:** gateway híbrido, no todo push ni todo polling. `pending-approval:new` es genuinamente event-driven (`@nestjs/event-emitter`, único emit point real en `DualConfirmService`). `budget:alert`/`kill-switch:activated` replican el mismo sondeo por `@Cron` que ya usa `TelegramBotService.checkBudgetAlerts()` (mismo dedup por umbral/día) — no se extrajo esa lógica a un servicio compartido todavía (AGENTS.md 1.1: esperar 3 consumidores antes de abstraer; con Telegram + este gateway son 2).
+
+**`main.ts`:** Swagger UI movida de `/api` a `/docs` (libera el path que BLUEPRINT 5.2 reserva para la API de negocio real), `.addBearerAuth()`, `cookie-parser` registrado.
+
+**Verificación (2026-08-01/02):** `tsc --noEmit` sin errores, `pnpm lint` verde, 324 tests unitarios (53 archivos) + 61 de integración (Postgres + Redis reales vía testcontainers) en verde, `pnpm build` limpio, `contracts/openapi.json` regenerado (188 líneas, puramente aditivo: `/api/auth/*`, `/api/chat`, `/api/hitl/*`, `/api/audit`, `/api/budget/*`, `/api/memory/recall`). `gh pr checks` real confirmado en verde (`build` 2m18s, GitGuardian pass) antes de mergear.
+
+**Nota de infraestructura local:** `pnpm lint`/`pnpm run generate:contract` necesitaron `NODE_OPTIONS=--max-old-space-size=8192` en la máquina de desarrollo local (heap default insuficiente para el type-aware lint de todo el repo) — no reprodujo en el runner de GitHub Actions (CI verde sin el flag), documentado por si vuelve a aparecer.
+
+Ver ADR 0007 (`docs/adr/0007-auth-jwt-api.md`) para el detalle de cada decisión y las alternativas descartadas.
+
+**Fuera de alcance, documentado:** streaming de tokens en el chat WS no existe (`ModelProvider` no lo soporta hoy — la respuesta llega completa cuando el turno termina, no token por token, límite real de PROMPTS.md ya anotado en el plan).
 
 ## Fase 5.5 — resumen técnico (Jin_Executor PR #5 + Jin_Core PR #16 + Jin_Infra PR #6, mergeados 2026-08-01)
 
@@ -386,6 +386,7 @@ También corregido de paso: glob patterns rotos en `lint`/`format`, y `package.j
 
 ## Recientemente completado (últimos 7 días)
 
+- 2026-08-02: [Jin_Core] [PR #17](https://github.com/JFrnck/Jin_Core/pull/17) mergeado — Fase 6.1 completa: Auth JWT single-user (Argon2id + cookie `__Host-`/Bearer) + API REST/WebSocket (`hitl`/`audit`/`budget`/`memory`/`chat` controllers, gateway realtime híbrido, rate limiting con Redis real). `JinErrorFilter` global cierra un gap real preexistente. 324 tests unitarios + 61 integración (Postgres+Redis reales) en verde, `contracts/openapi.json` regenerado, `gh pr checks` real confirmado (`build` 2m18s) antes de mergear. ADR 0007 escrito. Desbloquea Fase 6.2 (Web Dashboard) y 6.4 (CLI), ambas de Antigravity. Ver sección dedicada arriba.
 - 2026-08-01: [Jin_Core] [PR #14](https://github.com/JFrnck/Jin_Core/pull/14) mergeado (Antigravity) — Fase 5.3 completa: sesiones reales de Telegram con Agent Loop + Memoria Extendida, persistencia Postgres del transcript, ventana deslizante (20 mensajes) para el modelo vs. consolidación con transcript completo al cerrar sesión, comando `/memory`. **Revisado y mergeado por Claude Code**: checkout real de la rama, merge contra `main` actual (Fases 5.4/5.5 ya mergeadas), encontró y corrigió una colisión real de migración (`0004_telegram_sessions` → `0005_telegram_sessions`, `0004` ya tomado por `agent_ledger`), un merge conflict real en `schema.ts`, y un estilo menor (`created!` → chequeo explícito). Verificado tras el fix con `tsc`/`lint`/298 unitarios/59 integración (Postgres real)/smoke test de `AppModule` completo — `gh pr checks` real confirmado antes de mergear, no solo local.
 - 2026-08-01: [Jin_Executor] [PR #5](https://github.com/JFrnck/Jin_Executor/pull/5) + [Jin_Core] [PR #16](https://github.com/JFrnck/Jin_Core/pull/16) + [Jin_Infra] [PR #6](https://github.com/JFrnck/Jin_Infra/pull/6) mergeados — Fase 5.5 completa: pods de servicio de larga vida (`npm run dev`, etc.) expuestos bajo `https://<slug>.jinserver.com` con TTL obligatorio y reaper automático. Código servido vía archivos inline (tar.gz armado a mano, sin dependencia nueva) — decisión confirmada con el owner en esta sesión, ninguna tool le da hoy a un agente acceso a git real. Primer uso de un CRD de terceros (`IngressRoute` de Traefik) en el repo. RBAC extendido en Jin_Infra (cambio acotado en área normalmente de Antigravity, mismo precedente que backups Fase 1.2). ADR 0006 escrito. CI verificado con `gh pr checks` real en los 3 repos — dos flakiness intermitentes de CI encontradas y resueltas (retry de DNS en el test nuevo; re-run de un test de aislamiento preexistente de Fase 2.3, sin tocarlo). Ver sección dedicada arriba.
 - 2026-08-01: [Jin_Core] [PR #15](https://github.com/JFrnck/Jin_Core/pull/15) mergeado — Fase 5.4 completa: orquestación multi-agente (`OrchestratorService`, task ledger persistido en Postgres, escalera de decisión bajo-riesgo/material vía HITL existente, kill switch corta todo el run, presupuesto agregado vía `BudgetService.getSessionUsage()` nuevo). ADR 0005 escrito. 284 unitarios + 59 integración (Postgres real) en verde, CI verificado con `gh pr checks` real. Bug de wiring (`AGENT_CONFIG` no exportado) encontrado y corregido en un smoke test de `AppModule` completo antes de abrir el PR. Ver sección dedicada arriba. **Pendiente:** PR #14 (Antigravity, Fase 5.3) debe renumerar su migración `0004_telegram_sessions` a `0005_*` antes de mergear (colisión de numeración, ver nota en "En progreso").
