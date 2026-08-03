@@ -437,7 +437,9 @@ Escritos el 2026-07-25, con las Fases 1-4 ya mergeadas. Desviaciones del BLUEPRI
 - `Jin_Web` y `Jin_CLI` son los templates de scaffolding **sin tocar** desde Fase 2.1.
 - `Jin_Infra` tiene la base (Postgres, Redis, Traefik, cloudflared, observabilidad, backups, RBAC del Executor) pero **ningún manifest de deploy** para core/executor/web, y no hay GitOps.
 
-Orden de dependencias: 5.1 → (5.2, 5.3, 5.4 en paralelo — 5.4 es de Claude Code y 5.3 de Antigravity, sin colisión) → 5.5 (tras 5.2: mismo repo Executor, mismo owner) → 6.1 → (6.2, 6.3, 6.4 en paralelo) → 7.1 → 7.2 → 7.3. Mientras Claude Code hace 5.4/5.5/6.1, Antigravity avanza 5.3; mientras Antigravity hace 6.2-6.4, Claude Code prepara 7.2/7.3.
+Orden de dependencias: 5.1 → (5.2, 5.3, 5.4 en paralelo — 5.4 es de Claude Code y 5.3 de Antigravity, sin colisión) → 5.5 (tras 5.2: mismo repo Executor, mismo owner) → 6.1 → (6.2+6.3 en secuencia, ambas de Claude Code — mismo repo Jin_Web, misma regla de "una rama activa por repo" — en paralelo con 6.4 de Antigravity) → 7.1 → 7.2 → 7.3. Mientras Claude Code hace 5.4/5.5/6.1/6.2/6.3, Antigravity avanza 5.3 y luego 6.4; ambos convergen en 7.x.
+
+**Nota (2026-08-02):** `Jin_Web` (Fases 6.2 y 6.3) se reasignó de Antigravity a Claude Code por decisión explícita del owner, no por el criterio habitual de "dividir por fortaleza" (ver `docs/WORKFLOW.md` §2.1). Los prompts de 6.2/6.3 abajo ya están actualizados con la etiqueta `[CLAUDE CODE]`; `Jin_CLI` (6.4) sigue siendo de Antigravity.
 
 ---
 
@@ -649,10 +651,10 @@ USA CLAUDE OPUS 4.8 (auth es auditoría de seguridad por definición).
 ANTES DE IMPLEMENTAR: Propón el plan. Espera aprobación.
 ```
 
-### 6.2 [ANTIGRAVITY] — Web Dashboard MVP (repo: Jin_Web)
+### 6.2 [CLAUDE CODE] — Web Dashboard MVP (repo: Jin_Web)
 
 ```
-Vas a construir el dashboard real de Jin — hoy el repo es el template de Vite sin tocar. Repo tuyo.
+Vas a construir el dashboard real de Jin — hoy el repo es el template de Vite sin tocar. Repo tuyo (reasignado de Antigravity a Claude Code el 2026-08-02, decisión explícita del owner — ver `../Jin_Docs/docs/WORKFLOW.md` §2.1).
 
 ANTES DE ESCRIBIR CÓDIGO:
 1. Lee `../Jin_Docs/docs/BLUEPRINT.md` secciones 5 (dominios: el dash vive en `jin.jeanfranck.com`) y 8 (interfaces).
@@ -676,13 +678,15 @@ RESTRICCIONES:
 - No introduzcas librerías de estado/UI pesadas sin proponerlas antes en el plan.
 - El JWT no se guarda en localStorage sin justificar la decisión frente a alternativas en el plan.
 
+USA CLAUDE OPUS 4.8 para las decisiones de arquitectura (rutas, manejo de estado, cliente WS, dónde vive el JWT); Sonnet 5 para componentes rutinarios una vez decidido el esqueleto.
+
 ANTES DE IMPLEMENTAR: Propón el plan (estructura de rutas, manejo de estado, librerías). Espera aprobación.
 ```
 
-### 6.3 [ANTIGRAVITY] — Editor Monaco + applets (repo: Jin_Web)
+### 6.3 [CLAUDE CODE] — Editor Monaco + applets (repo: Jin_Web)
 
 ```
-Segunda mitad del dashboard (requiere 6.2 mergeado): edición de código con comentarios de la IA y applets generados por agentes.
+Segunda mitad del dashboard (requiere 6.2 mergeado): edición de código con comentarios de la IA y applets generados por agentes. Repo tuyo (reasignado de Antigravity a Claude Code el 2026-08-02).
 
 ANTES DE ESCRIBIR CÓDIGO:
 1. Lee `../Jin_Docs/docs/BLUEPRINT.md` sección 8 (Zone Widgets, applets) y 5.2 (separación de dominios).
@@ -697,6 +701,8 @@ CRITERIOS DE ÉXITO:
 - Criterio del BLUEPRINT Fase 6: editar código en el dashboard, la IA comenta línea por línea, y se aprueban cambios desde ahí.
 - Ningún iframe puede apuntar a un origen fuera de `jinserver.com` (test que lo pruebe).
 - CI verde en real. Actualiza `../Jin_Docs/STATUS.md`.
+
+USA CLAUDE OPUS 4.8 para el diseño de los Zone Widgets y el aislamiento de los iframes (frontera de seguridad de dominios); Sonnet 5 para el resto.
 
 ANTES DE IMPLEMENTAR: Propón el plan. Espera aprobación.
 ```

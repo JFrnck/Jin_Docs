@@ -315,8 +315,8 @@ Para todo lo demás, tests pueden ir en paralelo o después, pero antes de merge
 
 Ver `docs/WORKFLOW.md`. Regla general:
 
-- Claude Code lidera: Jin_Executor completo; en Jin_Core: HITL, audit, budget, security, model-provider, memory.
-- Antigravity lidera: Jin_Web, Jin_CLI, Jin_Infra; en Jin_Core: integraciones y migrations.
+- Claude Code lidera: Jin_Executor completo; Jin_Web completo (desde 2026-08-02, decisión explícita del owner — ver `docs/WORKFLOW.md` §2.1 y `STATUS.md`); en Jin_Core: HITL, audit, budget, security, model-provider, memory.
+- Antigravity lidera: Jin_CLI, Jin_Infra; en Jin_Core: integraciones y migrations.
 - Dentro de Jin_Core, ningún archivo se edita simultáneamente por ambos.
 
 ---

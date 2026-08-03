@@ -37,13 +37,15 @@ Usa cada uno donde su fortaleza importa.
 | Repo                | Owner primario | Razón                                                            |
 | ------------------- | -------------- | ---------------------------------------------------------------- |
 | **Jin_Executor** | Claude Code    | Frontera de seguridad: RBAC, ejecución aislada                   |
-| **Jin_Web**      | Antigravity    | Frontend React grande — se beneficia del contexto amplio         |
+| **Jin_Web**      | Claude Code    | Decisión explícita del owner (2026-08-02), no fortaleza técnica — ver nota abajo |
 | **Jin_CLI**      | Antigravity    | Ink CLI, scaffolding rápido                                      |
 | **Jin_Infra**    | Antigravity    | Manifests Kustomize, muchos archivos similares                   |
 | **Jin_Docs**     | Compartido     | Cambios por PR con revisión del owner                            |
 | **Jin_Core**     | Compartido     | Único repo donde ambos trabajan — ver mapa interno en 2.2        |
 
 El owner primario de un repo puede trabajar sin avisar. El otro IDE solo entra a ese repo con negociación previa (nota en `STATUS.md` + ok del owner humano).
+
+> **Excepción al criterio "dividir por fortaleza" (sección 1):** `Jin_Web` pasó de Antigravity a Claude Code el 2026-08-02 por decisión explícita del owner ("confío más en ti con lo que respecta a web"), no por un cambio en las fortalezas relativas de cada IDE. Ver `STATUS.md` sección "Decisiones del owner" para el detalle. El resto del mapa no cambia: `Jin_CLI`/`Jin_Infra` siguen con Antigravity.
 
 ### 2.2 Dentro de Jin_Core (el único territorio mixto)
 
@@ -203,7 +205,8 @@ Cambia de Claude Code a Antigravity si:
 - La tarea requiere leer >20 archivos a la vez.
 - Necesitas manipular un PDF grande o docs.
 - Vas a hacer scaffolding masivo (crear 50+ archivos).
-- El trabajo es browser-based (probar el dashboard end-to-end).
+
+Nota: "trabajo browser-based" dejó de ser motivo automático para preferir Antigravity — desde que `Jin_Web` es de Claude Code (2026-08-02), Claude Code prueba su propio dashboard end-to-end con sus herramientas de navegador.
 
 Cambia de Antigravity a Claude Code si:
 

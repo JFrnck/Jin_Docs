@@ -65,6 +65,7 @@ Cuando el plan esté listo, léelo con el owner línea por línea antes de acept
 Claude Code lidera estas partes (ver `docs/WORKFLOW.md` para el mapa completo):
 
 - Repo `Jin_Executor` **completo** — RBAC, ejecución aislada, ciclo de vida de pods.
+- Repo `Jin_Web` **completo** (desde 2026-08-02, decisión explícita del owner — no es el criterio habitual de "dividir por fortaleza", ver `docs/WORKFLOW.md` §2.1) — dashboard React, incluye Fases 6.2 y 6.3 del roadmap.
 - En `Jin_Core`:
   - `src/hitl/**` — clasificador HITL, timeouts, aprobaciones.
   - `src/audit/**` — audit log, hash chain, verificación de integridad.

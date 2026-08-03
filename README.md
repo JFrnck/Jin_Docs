@@ -55,7 +55,7 @@ No hay monorepo. Cada repo tiene su CI, su lockfile y su `.nvmrc`:
 | `Jin_Docs` | Esta documentación + `STATUS.md` + ADRs + runbooks | Compartido |
 | `Jin_Core` | Orquestador NestJS (HITL, audit, budget, security, memory, telegram, integraciones) | Compartido |
 | `Jin_Executor` | Ejecución aislada (único que habla con K8s) | Claude Code |
-| `Jin_Web` | Dashboard React (deploy: Cloudflare Pages) | Antigravity |
+| `Jin_Web` | Dashboard React (deploy: Cloudflare Pages) | Claude Code |
 | `Jin_CLI` | CLI con Ink | Antigravity |
 | `Jin_Infra` | Manifests Kustomize, Flux, bootstrap, scripts de backup | Antigravity |
 

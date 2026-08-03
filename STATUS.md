@@ -1,6 +1,6 @@
 # STATUS
 
-## Última actualización: 2026-08-02 (America/Lima) — actualización 18
+## Última actualización: 2026-08-02 (America/Lima) — actualización 19
 
 > **Antigravity ya está activo** (ver abajo, Fase 3.1/2.4/4.2). Retoma ownership normal de `docs/WORKFLOW.md` sección 2 — Claude Code ya no asume tareas `[ANTIGRAVITY]` por defecto, salvo negociación puntual vía esta misma nota.
 
@@ -8,8 +8,9 @@
 
 ### Claude Code
 
-- **Repo:** ninguno activo ahora mismo. Fase 6.1 (Jin_Core) mergeada — ver sección dedicada abajo.
-- **Próximo:** ninguna tarea propia bloqueada por el owner. Fase 6.2 (Web Dashboard, Antigravity) y 6.4 (CLI, Antigravity) quedan desbloqueadas por el merge de Fase 6.1. Claude Code retoma cuando el owner priorice Fase 7.x (runbook de activación / hardening) o pida revisión del trabajo de Antigravity en 6.2-6.4.
+- **Repo:** [Jin_Web] — todavía sin rama abierta. Fase 6.1 (Jin_Core) mergeada — ver sección dedicada abajo.
+- **Descripción:** `Jin_Web` reasignado de Antigravity a Claude Code el 2026-08-02 (decisión del owner, ver "Decisiones del owner"). Próxima tarea: Fase 6.2 (Web Dashboard MVP) siguiendo `docs/PROMPTS.md` 6.2 (ya re-etiquetado `[CLAUDE CODE]`).
+- **Próximo:** abrir rama `feature/claude/dashboard-mvp` en Jin_Web y proponer el plan detallado (rutas, manejo de estado, cliente WS, dónde vive el JWT) antes de escribir código — regla de siempre, `AGENTS.md` §10.1.
 
 ### Antigravity
 
@@ -154,6 +155,7 @@ Los `"name": "temp-*"` de `package.json` en Web y CLI ya no aplican como pendien
 - **2026-07-31 — Se evaluó y descartó consolidar todo en `jeanfranck.com`.** El owner preguntó si se podía prescindir del segundo dominio. Se puede técnicamente (cookies `__Host-` + validación estricta del header `Origin` + CSP cubren los dos ataques principales), pero cambia una garantía impuesta por el navegador por disciplina de código: con dominios separados un bug en la validación de `Origin` queda contenido porque el navegador igual se niega a mandar la cookie cross-site — **falla seguro**; con un solo dominio ese mismo bug deja a una app escrita por un LLM actuando con la sesión del owner, saltándose el HITL — **falla abierto**. Además nunca arregla la reputación en Safe Browsing sobre el dominio del portafolio ni el aislamiento entre previews. El owner compró `jinserver.com`. Se descartó también la variante path-based (`sandbox.jeanfranck.com/<slug>`), que es estrictamente peor: el origen del navegador es esquema+host+puerto y **no** incluye el path, así que todas las previews compartirían un solo origen (service worker de una secuestra a todas, `localStorage` y DOM compartidos).
 - **2026-07-31 — El dominio sandbox lleva la marca en el nombre, y se acepta el trade-off.** El patrón canónico (`githubusercontent.com`) usa un nombre deliberadamente no alineado con la marca para no transferirle confianza. `jinserver.com` sí la lleva, lo que debilita solo la dimensión *social* (alguien podría asumir que una preview es contenido oficial); la protección técnica queda intacta al 100% porque sigue siendo un dominio registrable distinto. Se compensa manteniendo la raíz sin contenido y sin branding de Jin ni enlaces de vuelta al panel en las previews. A cambio se gana claridad operativa: dentro de un año se sabrá para qué es y no se dejará vencer por error.
 - **2026-07-25 — Fase 4.3: proveedor de embeddings de la memoria — OpenAI `text-embedding-3-large`, no Voyage AI.** BLUEPRINT §6.4 menciona ambas opciones para el corpus en pgvector (no construido todavía), pero no especifica nada para la memoria sqlite-vec — no había ninguna API key de ninguno de los dos en el proyecto. Se le presentaron 3 opciones al owner: reusar Gemini (`GEMINI_API_KEY` ya configurada, cero vendor nuevo), OpenAI, o Voyage AI. Eligió OpenAI explícitamente pese al costo de integración de un vendor nuevo (`OPENAI_API_KEY` nueva, SDK `openai` nuevo) — no la opción de menor fricción. Truncado a 1024 dimensiones (balance calidad/tamaño para un store ≤100k vectores). Vive en `src/memory/embedding-provider.ts`, no en `src/model-provider/` (esa capacidad es TaskProfile/chat-completion con budget guard; embeddings es aparte, sin riesgo "runaway").
+- **2026-08-02 — `Jin_Web` (dashboard) pasa de Antigravity a Claude Code.** El owner pidió explícitamente que todo lo relativo a la web lo lidere Claude Code de ahora en adelante ("confío más en ti con lo que respecta a web"). A diferencia de las demás decisiones de esta sección, esta NO nace de una desviación técnica encontrada en el código — es una reasignación de ownership por preferencia directa del owner, contraria al criterio de "dividir por fortaleza" que motivó la asignación original a Antigravity (`docs/WORKFLOW.md` §1, frontend grande se beneficia del contexto amplio de Gemini). Actualizado: `docs/WORKFLOW.md` §2.1 (tabla + nota de excepción) y §6.3, `AGENTS.md` §7.4, `CLAUDE.md` §3, `README.md` (tabla de repos), `docs/PROMPTS.md` (6.2/6.3 re-etiquetados `[CLAUDE CODE]`, nota de dependencias), y los stubs `CLAUDE.md`/`AGENTS.md` dentro del propio repo `Jin_Web`. `Jin_CLI` e `Jin_Infra` siguen con Antigravity — la reasignación es específica a `Jin_Web`. Ver la estructura propuesta del dashboard en la sesión donde se tomó esta decisión (no persistida aparte; Claude Code la retoma al iniciar la Fase 6.2).
 
 ## Plan aprobado
 
@@ -179,14 +181,14 @@ Los `"name": "temp-*"` de `package.json` en Web y CLI ya no aplican como pendien
 14. **Fase 5.4** [Claude Code] — ✅ hecho, [PR #15](https://github.com/JFrnck/Jin_Core/pull/15) Jin_Core (orquestación multi-agente: sub-agentes coordinados vía task ledger estilo Jira persistido en Postgres). ADR 0005. Ver sección dedicada arriba.
 15. **Fase 5.5** [Claude Code] — ✅ hecho, [Jin_Executor PR #5](https://github.com/JFrnck/Jin_Executor/pull/5) + [Jin_Core PR #16](https://github.com/JFrnck/Jin_Core/pull/16) + [Jin_Infra PR #6](https://github.com/JFrnck/Jin_Infra/pull/6) (pods de servicio: preview apps con puertos expuestos bajo `*.jinserver.com`, TTL obligatorio). ADR 0006. Ver sección dedicada arriba.
 16. **Fase 6.1** [Claude Code] — ✅ hecho, [PR #17](https://github.com/JFrnck/Jin_Core/pull/17) Jin_Core (Auth JWT single-user + API REST/WebSocket). ADR 0007. Ver sección dedicada arriba.
-17. **Fase 6.2** [Antigravity] — Web Dashboard MVP (Jin_Web — hoy es el template sin tocar).
-18. **Fase 6.3** [Antigravity] — Monaco + Zone Widgets + applets (Jin_Web).
+17. **Fase 6.2** [Claude Code] — Web Dashboard MVP (Jin_Web — hoy es el template sin tocar). Reasignado de Antigravity el 2026-08-02, ver "Decisiones del owner".
+18. **Fase 6.3** [Claude Code] — Monaco + Zone Widgets + applets (Jin_Web). Reasignado de Antigravity el 2026-08-02.
 19. **Fase 6.4** [Antigravity] — CLI con Ink (Jin_CLI — hoy es el template sin tocar).
 20. **Fase 7.1** [Antigravity] — Deploy real de las apps + Flux GitOps (Jin_Infra + Dockerfiles).
 21. **Fase 7.2** [Claude Code] — Runbook de activación real (secretos reales, OAuth consent, webhook Telegram, smoke test E2E).
 22. **Fase 7.3** [Claude Code] — Hardening: auditoría de seguridad completa, chaos tests, MCP servers.
 
-Dependencias: 5.1 → (5.2, 5.3, 5.4) → 5.5 (tras 5.2) → 6.1 → (6.2, 6.3, 6.4) → 7.1 → 7.2 → 7.3. Paralelismo natural: Antigravity avanza 5.3 mientras Claude Code hace 5.4/5.5/6.1; Antigravity hace 6.2-6.4 mientras Claude Code prepara 7.2/7.3. **Fase 5.1 y 5.2 hechas — siguiente: 5.3 (Antigravity) y 5.4/5.5 en paralelo (Claude Code elige entre ambas).**
+Dependencias: 5.1 → (5.2, 5.3, 5.4) → 5.5 (tras 5.2) → 6.1 → (6.2+6.3 en secuencia [Claude Code], 6.4 [Antigravity] en paralelo) → 7.1 → 7.2 → 7.3. **Fases 5.1-5.5 y 6.1 hechas — siguiente: Claude Code planifica Fase 6.2 (Jin_Web), Antigravity puede avanzar 6.4 (Jin_CLI) en paralelo sin dependencia entre ambas.**
 
 ## Bloqueados / esperando
 
