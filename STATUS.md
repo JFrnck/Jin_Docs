@@ -2,6 +2,11 @@
 
 ## Última actualización: 2026-08-01 (America/Lima) — actualización 17
 
+> **Punto de retomada de la sesión de Claude Code (cortada al final del 2026-08-01):** Fase 6.1 (Jin_Core) quedó con la implementación **completa y verificada** (tsc/lint/324 tests unitarios/61 integración/build/contrato — todo en verde) y con **[PR #17](https://github.com/JFrnck/Jin_Core/pull/17) abierto, CI real en verde**, sin nada uncommiteado en ningún repo (`Jin_Core` en `feature/claude/auth-api`, `Jin_Docs` en `main`). **No hay ningún trabajo perdido ni a medias que retomar técnicamente.** Lo único pendiente es una acción del owner:
+> 1. Revisar y mergear (o pedir cambios en) el [PR #17](https://github.com/JFrnck/Jin_Core/pull/17).
+> 2. Al mergear, actualizar la sección "En progreso → Claude Code" de abajo a "✅ hecho" (mover el detalle a una sección "Fase 6.1 — resumen técnico" como las demás fases) y mover el PR a la tabla de "Pull Requests — todos mergeados a main".
+> 3. Después de mergear, Fase 6.2 (Web Dashboard, Antigravity) y 6.4 (CLI, Antigravity) quedan desbloqueadas — nada bloquea a Claude Code hasta entonces salvo que el owner pida cambios en el PR.
+>
 > **Antigravity ya está activo** (ver abajo, Fase 3.1/2.4/4.2). Retoma ownership normal de `docs/WORKFLOW.md` sección 2 — Claude Code ya no asume tareas `[ANTIGRAVITY]` por defecto, salvo negociación puntual vía esta misma nota.
 
 ## En progreso
