@@ -256,6 +256,17 @@ El owner pidió explícitamente web **completa, no un MVP recortado** — las 10
 - Íconos PWA son el favicon placeholder del template (`favicon.svg`), no el ícono 512px maskable que pide el diseño §09 — necesita un asset real, no generable en esta sesión.
 - El widget "sesión actual" del panel de presupuesto (v1/v2 del diseño) no tiene equivalente backend limpio — ya resuelto en v3 reemplazándolo por "última hora", que sí usa datos reales de la Fase 6.1.1.
 
+## Local dev tooling — Postgres/Redis (Jin_Infra PR #7 + Jin_Core PR #20, 2026-08-04)
+
+Cierra el "no verificado" que quedó anotado en Fase 6.2+6.3 (línea arriba): el owner pidió alojar Postgres/Redis local para probar el dashboard hoy mismo, no una decisión de hosting de producción.
+
+- **`Jin_Infra/docker-compose.dev.yaml`** (nuevo, PR #7) — no existía pese a estar referenciado desde antes en `Jin_Core/CLAUDE.md` y `Jin_Docs/CLAUDE.md` §4. Mismas imágenes que producción (`pgvector/pgvector:0.8.5-pg16`, `redis:7.4.9-alpine`), credenciales fijas de desarrollo, documentado en el propio archivo como nunca-producción. Nota: es una edición fuera del área habitual de Claude Code en este repo (`scripts/backup/**` según `Jin_Infra/CLAUDE.md`) — mismo criterio ya usado en Fase 5.5 para excepciones puntuales pedidas por el owner.
+- **`Jin_Core/.env.example`** (PR #20) — estaba desactualizado desde antes de Fase 6.1 (solo 5 de las 16 vars de `env.schema.ts`). Ahora completo, con placeholders dev-safe y puntero al compose de arriba.
+- **Gap real encontrado:** `src/db/migrate.ts` (y el resto de scripts standalone: `generate-contract.ts`, `hash-password.ts`) nunca cargan `.env` — a diferencia del `ConfigModule.forRoot()` de NestJS, que sí lo hace automático para el server. `pnpm run db:migrate` fallaba con todas las vars `undefined` hasta exportar `.env` al shell manualmente (`set -a; source .env; set +a`). No se agregó `dotenv`/`dotenv-cli` como dependencia nueva (requeriría preguntar al owner, CLAUDE.md §7) — queda documentado acá como el paso manual necesario hasta que se decida si vale la pena la dependencia.
+- **`start:dev` de Jin_Core necesitó `NODE_OPTIONS=--max-old-space-size=4096`** — el heap default de V8 (~2GB) no alcanza para `tsc --watch` de este tamaño de proyecto en esta máquina (8GB RAM total, memoria compartida con Antigravity IDE/VS Code). Sin este flag el proceso muere con `FATAL ERROR: Reached heap limit`.
+
+**Verificación real, cerrando el gap de Fase 6.2+6.3:** con ambos containers `healthy`, migraciones aplicadas (10 tablas), `Jin_Core` (`start:dev`, puerto 3000) y `Jin_Web` (`pnpm dev`, puerto 5173) corriendo — Playwright headless: login con `OWNER_PASSWORD_HASH` real, las 9 rutas (overview/hitl/chat/budget/audit/memory/board/editor/apps) cargan con datos reales (presupuesto `$0.00/$10.00 · límite 5,000,000 tokens`, WS "EN VIVO" conectado), sin pantallas negras ni errores de consola reales. Contraseña de desarrollo: `jin-dev-2026` (hash en `.env`, gitignored).
+
 ## Fase 6.1.1 — resumen técnico (Jin_Core PR #18, mergeado 2026-08-03)
 
 Encontrado revisando el diseño v2 del dashboard contra el código real, antes de empezar la Fase 6.2 (Jin_Web) — no era un requisito de PROMPTS.md, salió de verificar que la API soportara lo que el diseño ya asumía.
