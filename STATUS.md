@@ -1,6 +1,6 @@
 # STATUS
 
-## Última actualización: 2026-08-03 (America/Lima) — actualización 22
+## Última actualización: 2026-08-04 (America/Lima) — actualización 23
 
 > **Antigravity ya está activo** (ver abajo, Fase 3.1/2.4/4.2). Retoma ownership normal de `docs/WORKFLOW.md` sección 2 — Claude Code ya no asume tareas `[ANTIGRAVITY]` por defecto, salvo negociación puntual vía esta misma nota.
 
@@ -8,11 +8,8 @@
 
 ### Claude Code
 
-- **Repo:** [Jin_Web] — sin rama abierta todavía. Fase 6.1.1 (Jin_Core, PR #18) mergeada — ver sección técnica dedicada abajo.
-- **Estado del diseño del dashboard:** `docs/WEB_DESIGN_BRIEF.md` (brief para Claude Design) tuvo 2 entregas revisadas contra el código real. v1 encontró pantallas faltantes (memoria, conexión/sesión, vacíos, identidad/PWA) y 4 desajustes (unpause en la bandeja — riesgo real de que un agente se auto-reanude del kill switch —, nombres de tool inventados, dominio de preview apps incorrecto, tools dual-confirm inexistentes). v2 los corrigió todos y agregó las 4 secciones faltantes — **diseño visual aprobado, sin pendientes de revisión.**
-- **Próximo:** abrir `feature/claude/dashboard-mvp` en Jin_Web y proponer el plan de la Fase 6.2 (Web Dashboard MVP) sobre el diseño v2 ya aprobado y la API ya extendida (PR #18).
-- **Ya decidido para 6.2, no re-litigar:** TanStack Query sin Zustand (ver "Decisiones del owner"); JWT solo en la cookie `__Host-jin_session`, nunca en JS/localStorage; `ssr: false` (build estático a Cloudflare Pages); tipos vía `pnpm generate:api`.
-- **Gap conocido de la API, no bloquea el MVP:** no existen endpoints REST para el ledger de orquestación (Fase 5.4, pantalla 4.8 del brief) ni para preview services (Fase 5.5, pantalla 4.10) — hoy ambos solo existen como tools que invoca el agente. El MVP (aprobaciones + chat + audit + budget) no los necesita; si se quieren esas dos pantallas, es un PR chico previo en `Jin_Core` (`src/agent/**` es área de Claude Code, sin colisión).
+- **Repo:** ninguno activo ahora mismo. Fase 6.2+6.3 (Jin_Web) completa — ver sección técnica dedicada abajo.
+- **Próximo:** sin tarea propia asignada. Pendiente real (no bloqueante): probar el dashboard contra `Jin_Core` corriendo local con Postgres/Redis reales — esta sesión solo verificó en navegador sin el backend levantado (ver hallazgos en la sección técnica). Fase 6.4 (CLI) sigue siendo de Antigravity.
 
 ### Antigravity
 
@@ -126,6 +123,8 @@ Lo que el plan sí acierta: los 3 niveles HITL coinciden con blueprint/PROMPTS, 
 | Jin_Infra | [#6](https://github.com/JFrnck/Jin_Infra/pull/6) | Fase 5.5: RBAC + Certificate + PVC para pods de servicio | ✅ mergeado |
 | Jin_Core | [#17](https://github.com/JFrnck/Jin_Core/pull/17) | Fase 6.1: Auth JWT single-user + API REST/WebSocket | ✅ mergeado |
 | Jin_Core | [#18](https://github.com/JFrnck/Jin_Core/pull/18) | Fase 6.1.1: datos reales de budget + contrato OpenAPI completo (nestjs-zod) | ✅ mergeado |
+| Jin_Core | [#19](https://github.com/JFrnck/Jin_Core/pull/19) | Fase 6.1.2: endpoints REST de orquestación + preview services | ✅ mergeado |
+| Jin_Web | [#3](https://github.com/JFrnck/Jin_Web/pull/3) | Fase 6.2+6.3: Dashboard completo (10 pantallas, no MVP) | ✅ mergeado |
 
 **Nota — Jin_Infra #2 se reemplazó por #3:** al mergear #1 con `--delete-branch`, GitHub cerró automáticamente #2 porque su rama base (`feature/claude/infra-base`, la de #1) dejó de existir — efecto colateral no documentado de GitHub en PRs apilados, no una acción intencional. Un PR cerrado así no se puede reabrir ni re-apuntar vía API una vez cerrado. Recuperado abriendo #3 desde la misma rama head (`feature/claude/infra-backups`, intacta) directo contra `main`; contenido idéntico (26 archivos, 1128 inserciones), CI verde, mergeado normalmente.
 
@@ -188,8 +187,8 @@ Los `"name": "temp-*"` de `package.json` en Web y CLI ya no aplican como pendien
 14. **Fase 5.4** [Claude Code] — ✅ hecho, [PR #15](https://github.com/JFrnck/Jin_Core/pull/15) Jin_Core (orquestación multi-agente: sub-agentes coordinados vía task ledger estilo Jira persistido en Postgres). ADR 0005. Ver sección dedicada arriba.
 15. **Fase 5.5** [Claude Code] — ✅ hecho, [Jin_Executor PR #5](https://github.com/JFrnck/Jin_Executor/pull/5) + [Jin_Core PR #16](https://github.com/JFrnck/Jin_Core/pull/16) + [Jin_Infra PR #6](https://github.com/JFrnck/Jin_Infra/pull/6) (pods de servicio: preview apps con puertos expuestos bajo `*.jinserver.com`, TTL obligatorio). ADR 0006. Ver sección dedicada arriba.
 16. **Fase 6.1** [Claude Code] — ✅ hecho, [PR #17](https://github.com/JFrnck/Jin_Core/pull/17) Jin_Core (Auth JWT single-user + API REST/WebSocket). ADR 0007. Ver sección dedicada arriba.
-17. **Fase 6.2** [Claude Code] — Web Dashboard MVP (Jin_Web — hoy es el template sin tocar). Reasignado de Antigravity el 2026-08-02, ver "Decisiones del owner".
-18. **Fase 6.3** [Claude Code] — Monaco + Zone Widgets + applets (Jin_Web). Reasignado de Antigravity el 2026-08-02.
+17. **Fase 6.2** [Claude Code] — ✅ hecho, [PR #3](https://github.com/JFrnck/Jin_Web/pull/3) Jin_Web (Web Dashboard completo, no MVP). Reasignado de Antigravity el 2026-08-02. Ver sección dedicada arriba.
+18. **Fase 6.3** [Claude Code] — ✅ hecho, mismo [PR #3](https://github.com/JFrnck/Jin_Web/pull/3) (Monaco + Zone Widgets + preview apps — construidas junto con 6.2 a pedido del owner, no en dos PRs separados).
 19. **Fase 6.4** [Antigravity] — CLI con Ink (Jin_CLI — hoy es el template sin tocar).
 20. **Fase 7.1** [Antigravity] — Deploy real de las apps + Flux GitOps (Jin_Infra + Dockerfiles).
 21. **Fase 7.2** [Claude Code] — Runbook de activación real (secretos reales, OAuth consent, webhook Telegram, smoke test E2E).
@@ -224,6 +223,38 @@ Dependencias: 5.1 → (5.2, 5.3, 5.4) → 5.5 (tras 5.2) → 6.1 → (6.2+6.3 en
 **Criterio de éxito cerrado:** turno del agente "analiza este CSV con pandas" → LLM invoca `runCode({code, language: 'python'})` → clasifica `confirm` → pending approval → owner aprueba por Telegram → `ApprovalExecutionService` → `ToolExecutorRegistry` → `ExecutorClientService` → Executor real → Modal → resultado (stdout/stderr) sanitizado con `wrapUntrustedContent` (ya lo hace el agent loop para todo resultado de tool, Fase 5.1) vuelve al chat.
 
 **Fuera de alcance, documentado:** `runCode` con TypeScript local ya funcionaba desde Fase 2.3 (pod Deno) — esta fase solo conecta a Core y agrega el tier Modal. No hay preview services de larga vida todavía (eso es Fase 5.5, ahora desbloqueada).
+
+## Fase 6.1.2 — resumen técnico (Jin_Core PR #19, mergeado 2026-08-03)
+
+Cierre del último gap de API antes de construir el dashboard completo: el board de orquestación (pantalla 4.8 del brief) y las preview apps (4.10) no tenían endpoint REST, solo existían como tools que invoca el agente.
+
+- `GET /api/orchestrator/runs` (paginado, cursor por `createdAt` — `agentOrchestrationRuns.id` es uuid, sin orden natural, mismo criterio de `limit+1` que `AuditService.listRecent`) y `GET /api/orchestrator/runs/:runId` (run + tickets + hilo de comentarios de cada uno en una sola llamada — 404 real vía `RunNotFoundError`/`JinErrorFilter`). `LedgerRepository` ganó `listRuns()`/`getRun()`.
+- `GET /api/preview-services` / `DELETE /api/preview-services/:id` — delegan directo en `ExecutorClientService.listPreviewServices()`/`stopPreviewService()`, ya usados por el agent loop; sin lógica nueva.
+- Todos los DTOs vía `nestjs-zod` desde el día uno (`createZodDto` + `@ZodResponse` + `dateCodec`), evitando repetir el gap de contrato vacío de Fase 6.1.
+
+Verificado: 330 unitarios + 68 integración (Postgres real) + 19 e2e (pipeline real, incluido el 404), `gh pr checks` real en verde antes de mergear.
+
+## Fase 6.2+6.3 — resumen técnico (Jin_Web PR #3, mergeado 2026-08-04)
+
+El owner pidió explícitamente web **completa, no un MVP recortado** — las 10 pantallas del diseño v3 aprobado (`docs/WEB_DESIGN_BRIEF.md`), no solo las 6 de PROMPTS.md §6.2. Esto empujó primero la Fase 6.1.1 (arriba) para que el board de orquestación y las preview apps tuvieran datos reales, y recién después este PR.
+
+**Scaffolding real, reemplazando el template de Vite.** React Router **v8** (no v7 — BLUEPRINT 8.1 quedó desactualizado en la versión exacta, corregido: v8.3.0 es la evolución directa, mismas convenciones de framework mode, peer deps exactas con `react@19.2.7`/`vite@8`). SPA mode (`ssr:false`) para build estático a Cloudflare Pages. `resolve: { tsconfigPaths: true }` en `vite.config.ts` — sin esto el alias `~/*` no resuelve en dev (encontrado al primer arranque real del dev server, no en build).
+
+**Las 10 pantallas:** login, overview, bandeja HITL (`ApprovalCard` con los 4 niveles de riesgo, timer de dual-confirm en vivo cada segundo), chat (WS + plan en progreso), audit log (paginado por cursor), presupuesto + kill switch (`unpause` con hold-to-confirm de 3s, igual al diseño — nunca una tool, nunca en la bandeja), memoria (búsqueda semántica), board de orquestación (columnas por status + panel de conflicto que linkea a la bandeja real en vez de fabricar botones de aprobación sin `requestId`), editor Monaco con Zone Widgets reales (`changeViewZones`, no un tooltip), preview apps.
+
+**Seguridad, aplicada tal como se decidió en el plan:** `api-client.ts` nunca toca el JWT — cookie `__Host-jin_session` vía `credentials:'include'`, mismo criterio en el WS (`withCredentials:true`, coincide con `extractWsToken` de Jin_Core). Un 401 en cualquier momento (no solo al cargar) dispara `location.assign('/login?returnTo=...')` — cubre la "sesión expirada a mitad de una decisión" del diseño §07 con una sola pieza de código, no una por pantalla.
+
+**Paleta de riesgo validada con el skill de dataviz, no elegida a ojo.** Los 4 niveles HITL son ordinales (auto < notify < confirm < dual-confirm), no categóricos — se validaron con `validate_palette.js --ordinal` (un ramp de un solo matiz, monótono en lightness) contra la superficie real `#08090B`, no el surface de referencia del skill. `dual-confirm` = `#E2543F` (el accent ya aprobado en el diseño); `notify`/`confirm` se derivaron del mismo matiz (búsqueda automatizada de la combinación que pasa las 4 chequeas) para que el accent quedara reservado, como pedía el diseño.
+
+**Bug real encontrado verificando en navegador (Playwright headless), no solo build/lint:** `openapi-fetch` podía resolver `{ data: undefined, error: undefined }` ante un fallo de red real (proxy caído) — TanStack Query no tolera un `queryFn` que resuelve `undefined` y la pantalla de `/hitl` quedaba **completamente en negro** en vez de mostrar un error. Se centralizó en `unwrap()` (`api-client.ts`, usado por los 8 hooks de datos) y se agregó manejo de `isError` explícito donde faltaba (`budget`, `audit`, `orchestrator`, `orchestrator/:runId`, `preview`, `memory` — antes mostraban skeleton infinito o un "vacío" que en realidad era un error de red). Ninguno de los dos bugs aparece en `tsc`/lint/build — solo se manifiestan en el pipeline real request→fetch→React Query, exactamente el mismo motivo por el que Fase 6.1.1 encontró el bug de `bigint` solo vía e2e real.
+
+**Verificación:** `pnpm typecheck` (`react-router typegen && tsc --noEmit`) limpio, `pnpm lint` limpio (1 warning esperado, mismo patrón que el template oficial de React Router), `pnpm build` limpio (SPA mode). Navegador real (Playwright headless, Chromium instalado en la sesión): las 10 pantallas + vista móvil (nav inferior de 4 ítems: Overview/Aprobar/Chat/Gasto) sin errores de consola tras el fix. CI real verde (`build` 19s). **No verificado:** flujo end-to-end contra `Jin_Core` corriendo local con Postgres/Redis reales y datos genuinos — esta sesión no levantó el backend completo, solo el dev server de Jin_Web contra un proxy sin destino.
+
+**Gaps reales encontrados y documentados, sin rellenar con datos falsos:**
+- `pendingApprovals` no tiene columna para "solicitado por `<agente>`" ni para inputs externos (`external_inputs_summary` existe en `audit_log`, no ahí) — la tarjeta de aprobación no muestra esos dos campos del diseño hasta extender el schema real en `Jin_Core`. Relevante: sin el campo de inputs externos, el endpoint REST de hitl no cumple la regla de oro #8 tal cual hoy.
+- No existe una tool/endpoint de "comentar código línea por línea" para el editor — se pidieron comentarios vía `/api/chat` con un formato de línea numerada parseado client-side (regex), documentado en el código como puente, no como feature con contrato propio.
+- Íconos PWA son el favicon placeholder del template (`favicon.svg`), no el ícono 512px maskable que pide el diseño §09 — necesita un asset real, no generable en esta sesión.
+- El widget "sesión actual" del panel de presupuesto (v1/v2 del diseño) no tiene equivalente backend limpio — ya resuelto en v3 reemplazándolo por "última hora", que sí usa datos reales de la Fase 6.1.1.
 
 ## Fase 6.1.1 — resumen técnico (Jin_Core PR #18, mergeado 2026-08-03)
 
@@ -415,6 +446,8 @@ También corregido de paso: glob patterns rotos en `lint`/`format`, y `package.j
 
 ## Recientemente completado (últimos 7 días)
 
+- 2026-08-04: [Jin_Web] [PR #3](https://github.com/JFrnck/Jin_Web/pull/3) mergeado — Fase 6.2+6.3 completa: dashboard con las 10 pantallas del diseño v3 aprobado (no un MVP recortado, a pedido explícito del owner), reemplazando el template de Vite. React Router v8 (SPA, `ssr:false`), TanStack Query, Socket.IO, tipos generados desde el contrato real de Jin_Core. Paleta de riesgo HITL validada como ramp ordinal con el skill de dataviz. Bug real encontrado verificando en navegador real (Playwright headless): `openapi-fetch` resolvía `data:undefined` sin `error` ante fallos de red, dejando `/hitl` en pantalla negra — corregido con `unwrap()` centralizado + manejo de `isError` explícito en 5 pantallas más. `pnpm typecheck`/lint/build limpios, CI real verde (19s). Gaps documentados sin rellenar con datos falsos: `pendingApprovals` sin actor/inputs-externos, editor sin tool dedicada de comentarios (puente vía `/api/chat`), íconos PWA placeholder. Pendiente real: probar contra Jin_Core corriendo local con datos genuinos. Ver sección dedicada arriba.
+- 2026-08-03: [Jin_Core] [PR #19](https://github.com/JFrnck/Jin_Core/pull/19) mergeado — Fase 6.1.2: endpoints REST para el board de orquestación (`GET /api/orchestrator/runs`, `GET /api/orchestrator/runs/:runId`) y preview services (`GET`/`DELETE /api/preview-services`), sin lógica nueva (delegan en `LedgerRepository`/`ExecutorClientService` ya existentes). 330 unitarios + 68 integración + 19 e2e en verde. Ver sección dedicada arriba.
 - 2026-08-03: [Jin_Core] [PR #18](https://github.com/JFrnck/Jin_Core/pull/18) mergeado — Fase 6.1.1: `GET /api/budget` extendido con montos reales ($, tokens, detalle de kill switch) y contrato OpenAPI de Fase 6.1 completo (0 de 10 endpoints documentados → 10 de 10, vía `nestjs-zod`, decisión del owner). Bug real encontrado y corregido: `AuditLogRow.id` (bigint) no serializable por JSON, `GET /api/audit` habría reventado con una fila real. 325 unitarios + 65 integración + 14 e2e (pipeline HTTP real: guard + interceptor, no solo mocks) en verde, `gh pr checks` real confirmado antes de mergear. Encontrado revisando el diseño v2 del dashboard (aprobado, sin pendientes) contra el código real. Ver sección dedicada arriba.
 - 2026-08-02: [Jin_Core] [PR #17](https://github.com/JFrnck/Jin_Core/pull/17) mergeado — Fase 6.1 completa: Auth JWT single-user (Argon2id + cookie `__Host-`/Bearer) + API REST/WebSocket (`hitl`/`audit`/`budget`/`memory`/`chat` controllers, gateway realtime híbrido, rate limiting con Redis real). `JinErrorFilter` global cierra un gap real preexistente. 324 tests unitarios + 61 integración (Postgres+Redis reales) en verde, `contracts/openapi.json` regenerado, `gh pr checks` real confirmado (`build` 2m18s) antes de mergear. ADR 0007 escrito. Desbloquea Fase 6.2 (Web Dashboard) y 6.4 (CLI), ambas de Antigravity. Ver sección dedicada arriba.
 - 2026-08-01: [Jin_Core] [PR #14](https://github.com/JFrnck/Jin_Core/pull/14) mergeado (Antigravity) — Fase 5.3 completa: sesiones reales de Telegram con Agent Loop + Memoria Extendida, persistencia Postgres del transcript, ventana deslizante (20 mensajes) para el modelo vs. consolidación con transcript completo al cerrar sesión, comando `/memory`. **Revisado y mergeado por Claude Code**: checkout real de la rama, merge contra `main` actual (Fases 5.4/5.5 ya mergeadas), encontró y corrigió una colisión real de migración (`0004_telegram_sessions` → `0005_telegram_sessions`, `0004` ya tomado por `agent_ledger`), un merge conflict real en `schema.ts`, y un estilo menor (`created!` → chequeo explícito). Verificado tras el fix con `tsc`/`lint`/298 unitarios/59 integración (Postgres real)/smoke test de `AppModule` completo — `gh pr checks` real confirmado antes de mergear, no solo local.
