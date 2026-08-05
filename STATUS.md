@@ -8,8 +8,8 @@
 
 ### Claude Code
 
-- **Repo:** `Jin_Core`. **Recomendación #1** (readiness/liveness probes) implementada — [PR #22](https://github.com/JFrnck/Jin_Core/pull/22), ver sección dedicada abajo.
-- **Próximo:** **Recomendación #2** (poda + compresión del historial de chat). El owner agregó un requisito propio el 2026-08-04: no solo podar, sino **comprimir los chats cada cierto tiempo para no agotar el contexto**. Necesita decisión de política antes de código (ver la sección "Poda y compresión del historial" abajo). Fase 7.1 (deploy real) sigue siendo de Antigravity.
+- **Repo:** `Jin_Core`. **Recomendación #1** (readiness/liveness probes) implementada — [PR #22](https://github.com/JFrnck/Jin_Core/pull/22). **Recomendación #2** (poda + compresión del historial de chat) implementada — [PR #23](https://github.com/JFrnck/Jin_Core/pull/23), ver sección dedicada abajo.
+- **Próximo:** sin tarea propia asignada — ambas recomendaciones P0 de `docs/RECOMENDACIONES.md` cerradas. PRs #22 y #23 esperando revisión/merge del owner. Fase 7.1 (deploy real) sigue siendo de Antigravity; handoff pendiente hacia `Jin_CLI` para que adopte `compactedHistory` (ver sección de PR #23).
 
 ### Antigravity
 
@@ -301,15 +301,23 @@ Primera de las 9 recomendaciones de `docs/RECOMENDACIONES.md` en implementarse (
 
 **Verificación:** 347 unit (57 archivos) + 23 e2e (19 previos + 4 nuevos), `tsc --noEmit -p tsconfig.json` (incluye specs), `lint` y `build` limpios, contrato OpenAPI regenerado (+73 líneas). El integration spec de Redis no se pudo correr localmente (daemon de Docker apagado en la máquina) — verificado en el CI del PR, que sí corre `test:integration`.
 
-## Poda y compresión del historial de chat — pendiente de decisión del owner (2026-08-04)
+## Poda y compresión del historial de chat (Jin_Core PR #23, 2026-08-04)
 
-Recomendación #2 de `docs/RECOMENDACIONES.md` (P0) **más un requisito nuevo del owner**: no basta con podar, hace falta **comprimir los chats cada cierto tiempo para no agotar el contexto**. Sin implementar; requiere una decisión de política antes de escribir código.
+Recomendación #2 de `docs/RECOMENDACIONES.md` (P0) + requisito propio del owner (2026-08-04): no basta con podar, hace falta **comprimir los chats periódicamente para no agotar el contexto**. Implementada.
 
-**Estado verificado del código:** cero poda en los tres lados — `AgentService.runTurn` construye `[...input.history, nuevo mensaje]` y nunca recorta; `Jin_Web/app/routes/chat.tsx` y `Jin_CLI/source/components/ChatView.tsx` acumulan `ModelMessage[]` y reenvían todo. `/chat` (REST y WS) es stateless por diseño (Fase 6.1).
+**Diseño (`src/agent/history-compaction.logic.ts` + `.service.ts`):** criterio híbrido — techo de tokens estimados (`config/agent.yaml: max_history_tokens`) + los últimos `preserve_last_turns` turnos **siempre** quedan verbatim (piso `.min(1)`, no solo UX — es la garantía de que el turno actual, con tags `<untrusted_content_{nonce}>` recién creados, nunca entra a una llamada de compresión el mismo turno en que se generó). El tramo viejo se resume (TaskProfile `history_compaction` nuevo, **sin `tools` declaradas** — garantía estructural de que la compresión no puede invocar ninguna tool real) y se consolida a `src/memory/` — **primer consumidor real de `MemoryService.consolidate()`** desde Fase 4.3 (handoff que llevaba semanas sin dueño). Ninguna de las dos llamadas puede romper el turno: fallos se loguean y degradan a "no se comprimió esta vez".
 
-**Restricción de seguridad que condiciona el diseño (no es solo costo):** `summarizeUntrustedSources(messages)` (`agent.service.ts:343`, PR #21) depende de que `messages` **no** se pode — extrae por regex los `source` de los tags `<untrusted_content_{nonce}>` que dejaron las tools `auto`/`notify` de iteraciones anteriores del mismo turno, y con eso puebla `pending_approvals.external_inputs_summary`, el "Influido por: ..." que el owner ve **antes** de aprobar. Podar o resumir sin preservar esa procedencia rompe en silencio la garantía de `AGENTS.md` §5.1 punto 3: el owner aprobaría creyendo que ninguna fuente externa influyó. Cualquier diseño de poda/compresión tiene que resolver esto explícitamente, no como detalle de implementación.
+**El hallazgo que simplificó el diseño respecto a lo planteado inicialmente:** se investigó si hacía falta que `summarizeUntrustedSources(messages)` (`agent.service.ts`, PR #21 — puebla el "Influido por" del HITL) sobreviviera a la poda de `input.history`. **No hace falta.** Verificado: el único cliente real que manda `history` entre turnos (`Jin_CLI/ChatView.tsx`) solo persiste `{role, content: string}` con el `finalResponse` final de cada turno — nunca los bloques `tool_result` intermedios que llevan los tags `<untrusted_content_{nonce}>`. Esos tags mueren al final de cada `runTurn()`, nunca cruzan al cliente, nunca vuelven en `history` — podar `input.history` entre turnos no toca ni puede tocar la trazabilidad HITL, que se calcula en vivo cada turno sobre datos que la poda ni ve.
 
-**Piezas que ya existen y no hay que construir:** `src/memory/` (Fase 4.3) con `consolidate()`/`recall()` — pensado justo para que el tramo viejo se consolide en vez de perderse, y que hoy **sigue sin ningún consumidor real** (handoff documentado en la sección de Fase 4.3, sin dueño). Este sería el primero.
+**El riesgo real de seguridad, más acotado que la hipótesis inicial:** el LLM que resume el tramo viejo, y `ConsolidationService.distill()` (dormido, sin caller real hasta este PR), leen texto de turnos anteriores que puede citar textualmente contenido externo que el turno original ya vio envuelto y con instrucción defensiva — pero ninguno de esos dos prompts la tenía. Se resolvió con `buildGenericUntrustedContentInstruction()` nueva (`src/security/injection-sanitizer.ts`, variante sin nonce de la instrucción que ya usaba `agent.service.ts`, para prompts que operan offline sobre texto ya cerrado), agregada a ambos — no envolviendo el resultado con `wrapUntrustedContent` (ese mecanismo es para tool output crudo del turno actual con nonce de sesión activo, no aplica semánticamente a un resumen de conversación pasada).
+
+**Contrato:** `AgentTurnResult` gana `compactedHistory?` — como `/api/chat` es stateless (Fase 6.1, sin persistencia de sesión server-side), es la única forma de que la compresión reduzca algo real: el caller la **adopta** (reemplaza, no concatena) como su historial para el próximo turno. Campo aditivo/opcional, contrato OpenAPI regenerado.
+
+**Fuera de alcance, documentado — no se toca en este PR:**
+- **Handoff a Antigravity:** `Jin_CLI` necesita adoptar `compactedHistory` (reemplazar su array local por el valor devuelto cuando esté presente) para que la compresión tenga efecto real en el único cliente que hoy acumula historial sin cota. Sin este adopt, el fix queda construido pero sin consumidor.
+- **Gap preexistente encontrado, no relacionado:** `Jin_Web/app/features/chat/useChat.ts` hoy **no manda `history` al backend en absoluto** (solo `{sessionId, objective}`) — cada turno de Jin_Web ya es de facto sin memoria conversacional, un bug distinto ("se olvida todo", no "crece sin cota") que este trabajo no resuelve.
+
+**Verificación:** 364 unit (61 archivos, incluye caso adversarial: transcript con instrucción embebida no cambia el comportamiento del código, la defensa es de prompt) + 20 e2e, `tsc --noEmit -p tsconfig.json`, `lint` y `build` limpios, contrato OpenAPI regenerado (+111 líneas), `docs/MODEL_ROUTING.md` actualizado con el profile nuevo. `test:integration` no se pudo correr localmente (Docker apagado en la máquina) — verificado en el CI del PR.
 
 ## HITL: actor + inputs externos en pendingApprovals (Jin_Core PR #21 + Jin_Web PR #4, 2026-08-04)
 
