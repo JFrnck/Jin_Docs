@@ -8,8 +8,8 @@
 
 ### Claude Code
 
-- **Repo:** ninguno activo ahora mismo. Fase 6.2+6.3 (Jin_Web) completa — ver sección técnica dedicada abajo.
-- **Próximo:** sin tarea propia asignada. Pendiente real (no bloqueante): probar el dashboard contra `Jin_Core` corriendo local con Postgres/Redis reales — esta sesión solo verificó en navegador sin el backend levantado (ver hallazgos en la sección técnica). Fase 6.4 (CLI) sigue siendo de Antigravity.
+- **Repo:** `Jin_Core`. **Recomendación #1** (readiness/liveness probes) implementada — [PR #22](https://github.com/JFrnck/Jin_Core/pull/22), ver sección dedicada abajo.
+- **Próximo:** **Recomendación #2** (poda + compresión del historial de chat). El owner agregó un requisito propio el 2026-08-04: no solo podar, sino **comprimir los chats cada cierto tiempo para no agotar el contexto**. Necesita decisión de política antes de código (ver la sección "Poda y compresión del historial" abajo). Fase 7.1 (deploy real) sigue siendo de Antigravity.
 
 ### Antigravity
 
@@ -287,6 +287,29 @@ El owner preguntó si las fases pendientes cubrían todas las funciones que Jin 
 - **PgBouncer (§3.3):** entra cuando Postgres muestre presión real de conexiones. Con 1 réplica de core y un solo usuario, hoy no hay caso.
 
 **No son gaps** (desviaciones ya decididas y documentadas): BullMQ descartado (el diagrama de arquitectura de §2 quedó desactualizado, es solo el diagrama), Alertmanager reemplazado por Telegram directo (Fase 4.1), MCP servers y chaos tests ya cubiertos por 7.3, manifests de deploy ya cubiertos por 7.1.
+
+## Recomendación #1 — readiness/liveness probes reales (Jin_Core PR #22, 2026-08-04)
+
+Primera de las 9 recomendaciones de `docs/RECOMENDACIONES.md` en implementarse (P0, va antes o junto con Fase 7.1). El único endpoint de salud era `GET /`, un string estático: apuntar ahí la readinessProbe que BLUEPRINT §12.2 declara obligatoria haría ficticio el "cero downtime" del rolling update `maxSurge:1/maxUnavailable:0`.
+
+- `GET /health/live` no consulta dependencias a propósito (reiniciar el pod no arregla un Postgres caído); `GET /health/ready` sí: Postgres es dependencia dura (`error` + 503), Redis solo degrada (`degraded` + 200). La asimetría es coherente con el fail-open ya decidido en ADR 0007 #4 — sacar el pod de rotación por Redis contradiría esa decisión justo cuando más importa.
+- Ambas `@Public()` (el kubelet no tiene JWT) y `@SkipThrottle()` (las probes salen de la IP del nodo; un 429 se lee como pod caído). Los 4 e2e nuevos verifican exactamente eso contra el pipeline HTTP real — un unit spec del controller no ve el guard global.
+- `RedisThrottlerStorage.isReachable()` reusa la única conexión Redis del repo en vez de abrir una segunda para sondear. Su integration spec es el **primer consumidor real de `test/support/redis-testcontainer.ts`**, que estaba escrito desde antes sin ningún test que lo usara.
+- Timeout propio de 2 s por chequeo: `pg.Pool` sin `connectionTimeoutMillis` reintenta hasta el timeout TCP del SO (minutos).
+
+**Handoff a Fase 7.1 (Antigravity):** los manifests deben apuntar `livenessProbe` → `/health/live` y `readinessProbe` → `/health/ready`, **no** `/`.
+
+**Verificación:** 347 unit (57 archivos) + 23 e2e (19 previos + 4 nuevos), `tsc --noEmit -p tsconfig.json` (incluye specs), `lint` y `build` limpios, contrato OpenAPI regenerado (+73 líneas). El integration spec de Redis no se pudo correr localmente (daemon de Docker apagado en la máquina) — verificado en el CI del PR, que sí corre `test:integration`.
+
+## Poda y compresión del historial de chat — pendiente de decisión del owner (2026-08-04)
+
+Recomendación #2 de `docs/RECOMENDACIONES.md` (P0) **más un requisito nuevo del owner**: no basta con podar, hace falta **comprimir los chats cada cierto tiempo para no agotar el contexto**. Sin implementar; requiere una decisión de política antes de escribir código.
+
+**Estado verificado del código:** cero poda en los tres lados — `AgentService.runTurn` construye `[...input.history, nuevo mensaje]` y nunca recorta; `Jin_Web/app/routes/chat.tsx` y `Jin_CLI/source/components/ChatView.tsx` acumulan `ModelMessage[]` y reenvían todo. `/chat` (REST y WS) es stateless por diseño (Fase 6.1).
+
+**Restricción de seguridad que condiciona el diseño (no es solo costo):** `summarizeUntrustedSources(messages)` (`agent.service.ts:343`, PR #21) depende de que `messages` **no** se pode — extrae por regex los `source` de los tags `<untrusted_content_{nonce}>` que dejaron las tools `auto`/`notify` de iteraciones anteriores del mismo turno, y con eso puebla `pending_approvals.external_inputs_summary`, el "Influido por: ..." que el owner ve **antes** de aprobar. Podar o resumir sin preservar esa procedencia rompe en silencio la garantía de `AGENTS.md` §5.1 punto 3: el owner aprobaría creyendo que ninguna fuente externa influyó. Cualquier diseño de poda/compresión tiene que resolver esto explícitamente, no como detalle de implementación.
+
+**Piezas que ya existen y no hay que construir:** `src/memory/` (Fase 4.3) con `consolidate()`/`recall()` — pensado justo para que el tramo viejo se consolide en vez de perderse, y que hoy **sigue sin ningún consumidor real** (handoff documentado en la sección de Fase 4.3, sin dueño). Este sería el primero.
 
 ## HITL: actor + inputs externos en pendingApprovals (Jin_Core PR #21 + Jin_Web PR #4, 2026-08-04)
 
