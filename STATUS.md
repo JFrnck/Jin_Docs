@@ -9,7 +9,7 @@
 ### Claude Code
 
 - **Repo:** `Jin_Core`. **Recomendación #1** (readiness/liveness probes) implementada — [PR #22](https://github.com/JFrnck/Jin_Core/pull/22). **Recomendación #2** (poda + compresión del historial de chat) implementada — [PR #23](https://github.com/JFrnck/Jin_Core/pull/23), ver sección dedicada abajo.
-- **Próximo:** ejecutando **Fase 0.1 debug #1** (corrección de la Ronda 2 de `docs/RECOMENDACIONES.md`, pedida por el owner 2026-08-05). Cerrados: 10+26 ([Jin_Executor PR #6](https://github.com/JFrnck/Jin_Executor/pull/6), CI verde, punto 28 quedó abierto — ver sección dedicada), 11+12+13 ([Jin_Core PR #24](https://github.com/JFrnck/Jin_Core/pull/24), CI verde), 16 (mitad Web)+17 ([Jin_Web PR #5](https://github.com/JFrnck/Jin_Web/pull/5), CI verde). Quedan de mi lado: 18 (bump `js-yaml`, Core) + 19 (bump `monaco-editor`, Web) — ambos requieren planning mode por ser cambio de dependencias (`Jin_Docs/CLAUDE.md` §2.1). El resto de la Fase 0.1 (14, 15, 16 mitad CLI, 20 mitad CLI, 20.b, 25, la mayoría de 21-23, 24) es de Antigravity o deuda de fondo — PRs #22 y #23 (Fase 0.1 Ronda 1) siguen esperando revisión/merge del owner.
+- **Próximo:** **toda la porción de Claude Code en Fase 0.1 debug #1 está cerrada.** 5 PRs abiertos, todos con CI verde, ninguno mergeado (a la espera del owner): [Jin_Executor #6](https://github.com/JFrnck/Jin_Executor/pull/6) (10+26, punto 28 quedó abierto — ver sección dedicada), [Jin_Core #24](https://github.com/JFrnck/Jin_Core/pull/24) (11+12+13), [Jin_Web #5](https://github.com/JFrnck/Jin_Web/pull/5) (16 mitad Web+17), [Jin_Core #25](https://github.com/JFrnck/Jin_Core/pull/25) (18), [Jin_Web #6](https://github.com/JFrnck/Jin_Web/pull/6) (19). Más PRs #22/#23 de la Ronda 1, previos a esta ronda de correcciones. **Lo que queda de la Fase 0.1 (14, 15, 16 mitad CLI, 20 mitad CLI, 20.b, 25, 21-23 en su mayoría) es de Antigravity o deuda de fondo (tests) — ver handoff explícito abajo.**
 - **Handoffs abiertos hacia Antigravity (`Jin_CLI`):** (a) adoptar `compactedHistory` o el PR #23 queda sin consumidor real; (b) **regenerar `source/api-types.ts`** — está desincronizado desde el PR #21 y por eso `jin tasks` no muestra `actor`/`externalInputsSummary`, ver Recomendación 20.b.
 
 ### Antigravity
@@ -210,10 +210,10 @@ El owner pidió corregir los 18 puntos de la Ronda 2 de `docs/RECOMENDACIONES.md
 **[Claude Code] — en ejecución esta sesión:**
 - [x] 10 (zip-slip) + 26 (límites del init container) — Jin_Executor. [PR #6](https://github.com/JFrnck/Jin_Executor/pull/6). `readOnlyRootFilesystem` (mitad del punto 10) se intentó y se revirtió por un cuelgue real en el CI de K3s — ver punto 28 nuevo. De paso: regenerado `Jin_Executor/contracts/openapi.json`, desactualizado desde Fase 5.5 (punto 27 nuevo).
 - [ ] 28 (nuevo) — Jin_Executor: `readOnlyRootFilesystem` en preview-service, pendiente de clúster K3s real para diagnosticar por qué cuelga el smoke test.
-- [x] 11 + 12 + 13 — Jin_Core (`src/hitl`, `src/audit`): 3 notificaciones muertas → Telegram real, lock de audit chain persistido, `audit_log` conserva actor/inputs externos al resolver. [PR #24](https://github.com/JFrnck/Jin_Core/pull/24), CI en curso.
+- [x] 11 + 12 + 13 — Jin_Core (`src/hitl`, `src/audit`): 3 notificaciones muertas → Telegram real, lock de audit chain persistido, `audit_log` conserva actor/inputs externos al resolver. [PR #24](https://github.com/JFrnck/Jin_Core/pull/24), CI verde.
 - [x] 16 (mitad Web) + 17 — Jin_Web: manejo de `disconnect` del WS, mutaciones de `ApprovalCard`/`preview`/`budget`/`editor` sin `catch`. [PR #5](https://github.com/JFrnck/Jin_Web/pull/5), CI verde.
-- [ ] 18 — Jin_Core: bump `js-yaml` (advisory alto, dependencia de producción).
-- [ ] 19 — Jin_Web: `monaco-editor`→`dompurify` vulnerable, evaluar upgrade.
+- [x] 18 — Jin_Core: bump `js-yaml` (advisory alto, dependencia de producción). [PR #25](https://github.com/JFrnck/Jin_Core/pull/25), CI verde.
+- [x] 19 — Jin_Web: `monaco-editor`→`dompurify` vulnerable. [PR #6](https://github.com/JFrnck/Jin_Web/pull/6), CI verde.
 - [ ] 3 + 4 + 5 (Ronda 1, seguían sin tocar) — Jin_Core: `.env` en scripts standalone, colisión Redis e2e, heap de Node en tooling.
 
 **[Antigravity] — handoff, no se toca desde esta sesión sin negociación previa (`Jin_CLI/CLAUDE.md`):**
@@ -235,6 +235,14 @@ Se irá tachando y anotando PR por punto a medida que se cierre.
 ## Bloqueados / esperando
 
 - Ejecución real del bootstrap en la VM OCI la hace el owner (Claude Code solo escribe manifests/scripts).
+- **Handoff a Antigravity — resto de la Fase 0.1 debug #1** (2026-08-05, ver `docs/RECOMENDACIONES.md` Ronda 2 para el detalle completo de cada punto):
+  - **14** — `Jin_CLI`: `jin login` toma la contraseña como argumento posicional de shell (queda en `~/.zsh_history`/`ps aux`). Prompt enmascarado en vez de argv.
+  - **15** — `Jin_Infra`: `scripts/backup/verify-restore.sh` solo verifica el backup de Postgres — Redis y `memory.db` nunca se restauran ni se verifican.
+  - **16 (mitad CLI)** — `Jin_CLI/source/api/ws-chat.ts`: `reconnection: false` explícito, sin manejo de `disconnect` en `ChatView.tsx`. La mitad Web ya está resuelta (PR #5).
+  - **20 (mitad CLI)** — CI de `Jin_CLI`: `pnpm run test`/`generate:api` corren con `|| true` (un test roto nunca tumba el CI), y falta el paso de `lint`.
+  - **20.b — el más urgente de este bloque:** `Jin_CLI/source/api-types.ts` está desincronizado desde el PR #21 de Core — le faltan `actor`/`externalInputsSummary`, así que `jin tasks` muestra menos información que el dashboard web para la misma decisión de aprobación. Fix mecánico: `pnpm generate:api` + mostrar ambos campos en `TasksView.tsx`.
+  - **25** — `Jin_Infra/scripts/bootstrap/01-install-k3s.sh` y `05-flux-bootstrap.sh`: instalan vía `curl | sh` sin verificar checksum/firma del instalador.
+  - **21-23** (specs faltantes en piezas de seguridad de Core, cero tests en Web, cobertura mínima en CLI) — deuda de fondo, no bloqueante, mayormente de Antigravity donde aplica a sus repos.
 
 ## Fase 5.1 — resumen técnico (Jin_Core PR #11, mergeado 2026-07-25)
 
@@ -317,6 +325,20 @@ El owner preguntó si las fases pendientes cubrían todas las funciones que Jin 
 - **PgBouncer (§3.3):** entra cuando Postgres muestre presión real de conexiones. Con 1 réplica de core y un solo usuario, hoy no hay caso.
 
 **No son gaps** (desviaciones ya decididas y documentadas): BullMQ descartado (el diagrama de arquitectura de §2 quedó desactualizado, es solo el diagrama), Alertmanager reemplazado por Telegram directo (Fase 4.1), MCP servers y chaos tests ya cubiertos por 7.3, manifests de deploy ya cubiertos por 7.1.
+
+## Fase 0.1 debug #1 — punto 18+19 resuelto, cierre de la porción Claude Code (Jin_Core PR #25 + Jin_Web PR #6, 2026-08-05)
+
+**#18 — `js-yaml` (Jin_Core).** `package.json` ya declaraba `^5.2.1`, un rango que permite subir — pero `@nestjs/swagger@11.4.6` (vía `nestjs-zod`) fija su propia copia de `js-yaml` en el exacto `5.2.1`, sin rango. Un `pnpm update js-yaml` normal solo mueve la dependencia directa del repo, no el pin de un tercero. Fix: `overrides: {js-yaml: ^5.2.3}` en `pnpm-workspace.yaml`. `pnpm audit`: 16 → 15 vulnerabilidades.
+
+**#19 — `monaco-editor`→`dompurify` (Jin_Web).** `monaco-editor@0.56.0` es la última versión estable publicada (sin upgrade que soltar) y fija `dompurify` en el exacto `3.4.8`. Mismo mecanismo que #18: `overrides: {dompurify: ^3.4.12}` en `pnpm-workspace.yaml` (nuevo en este repo). `pnpm audit`: `dompurify` ya no aparece.
+
+**Detalle no obvio, común a ambos:** pnpm 11 **ya no lee** `pnpm.overrides` desde `package.json` — avisa *"no longer read by pnpm"* al instalar, silencioso si no se presta atención al mensaje. El override tiene que vivir en `pnpm-workspace.yaml`. Jin_Core ya centralizaba ahí su config de pnpm (`allowBuilds`); Jin_Web no tenía ese archivo, se creó de cero.
+
+**Corrección de severidad:** al reportar el punto 19 originalmente lo describí como advisory sin precisar severidad — verificado en detalle al implementar, los 3 advisories de `dompurify` son moderado/bajo, no alto.
+
+**Verificación:** ambos repos con `typecheck`/`lint`/`build` limpios (Jin_Core) o `typecheck`/`lint` limpios (Jin_Web — el `build`/`dev` no levantan en esta máquina por un problema de `/etc/hosts` ajeno al código, ya documentado en el PR #5). Jin_Core: 337 unit + 19 e2e, `test:integration` no corrido localmente (Docker apagado) — CI del PR #25 confirmado verde. Jin_Web: CI del PR #6 confirmado verde.
+
+**Cierra la porción de Claude Code en la Fase 0.1 debug #1.** Handoff explícito a Antigravity para el resto — ver sección "Bloqueados / esperando" abajo.
 
 ## Fase 0.1 debug #1 — punto 16 (mitad Web) + 17 resuelto (Jin_Web PR #5, 2026-08-05)
 

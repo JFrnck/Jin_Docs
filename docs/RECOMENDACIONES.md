@@ -214,17 +214,21 @@ Ya documentado como gap conocido en `STATUS.md` (Fase 6.2+6.3): hoy es el `favic
 
 **Resuelto en [Jin_Web PR #5](https://github.com/JFrnck/Jin_Web/pull/5)** (2026-08-05): `catch` + estado de error local en los 4 sitios, más `unwrap()` agregado a `preview.tsx`/`budget.tsx` (que hoy ni siquiera lanzaban — `openapi-fetch` no lanza por sí solo, así que el error se ignoraba por completo, no solo quedaba sin capturar). Nuevo `getErrorMessage()` en `api-client.ts`, reusado en los 4.
 
-#### 18. `js-yaml` de producción con un advisory alto (Jin_Core)
+#### 18. ✅ RESUELTO — `js-yaml` de producción con un advisory alto (Jin_Core)
 
 **Verificado:** `package.json:49` declara `"js-yaml": "^5.2.1"` como dependencia de **producción**; la instalada es exactamente `5.2.1`, y el advisory (DoS por parsing exponencial en flow collections) cubre `>=5.0.0 <=5.2.1`. Se usa al arrancar, en `models-config.schema.ts:2`, `agent-config.schema.ts:2` y `budget-config.schema.ts:2`.
 
 **Honestidad sobre el riesgo real:** los tres YAML que parsea son archivos del propio repo, no entrada de un atacante — la explotabilidad práctica hoy es baja. Pero es una dependencia de producción con advisory alto y el bump es trivial, así que no hay razón para dejarlo. `pnpm audit` completo en `Jin_Core` da 10 high / 6 moderate; el resto es todo `devDependencies` (esbuild, brace-expansion, postcss vía tooling) que no llega al bundle.
 
-#### 19. `monaco-editor` arrastra `dompurify` vulnerable (Jin_Web, producción)
+**Resuelto en [Jin_Core PR #25](https://github.com/JFrnck/Jin_Core/pull/25)** (2026-08-05), no tan trivial como se pensó: `package.json` ya permitía subir (`^5.2.1`), pero `@nestjs/swagger` (vía `nestjs-zod`) fija su propia copia de `js-yaml` en el exacto `5.2.1` — un `pnpm update` normal no la toca. Hizo falta `pnpm.overrides` (en `pnpm-workspace.yaml`, no en `package.json` — pnpm 11 ya no lee ese campo ahí). `pnpm audit`: 16 → 15 vulnerabilidades.
+
+#### 19. ✅ RESUELTO — `monaco-editor` arrastra `dompurify` vulnerable (Jin_Web, producción)
 
 **Verificado:** `monaco-editor@0.56.0` es dependencia de producción y trae `dompurify` con varios GHSA abiertos. Superficie real: el editor renderiza comentarios generados por el LLM (Fase 6.3).
 
 **Propuesta:** revisar si hay versión de monaco con el `dompurify` parcheado; si no, dejarlo anotado con fecha y revisar en el siguiente ciclo, no ignorarlo en silencio.
+
+**Corrección de severidad al cerrar:** los 3 advisories reales son moderado/bajo, no alto como sugerí al reportar el hallazgo por primera vez (los verifiqué con detalle recién al implementar). **Resuelto en [Jin_Web PR #6](https://github.com/JFrnck/Jin_Web/pull/6)** (2026-08-05): `monaco-editor@0.56.0` es la última versión estable (no hay upgrade que soltar), y fija `dompurify` en el exacto `3.4.8` — mismo mecanismo que #18, `pnpm.overrides` en `pnpm-workspace.yaml` (nuevo en este repo). `pnpm audit`: `dompurify` ya no aparece.
 
 #### 20. CI que no puede fallar: `Jin_CLI` y `Jin_Web`
 
@@ -342,8 +346,8 @@ Ya documentado como gap conocido en `STATUS.md` (Fase 6.2+6.3): hoy es el `favic
 | 15 | Redis y `memory.db` sin verificación de restore | Infra | P0 | Bajo | Handoff (Antigravity) |
 | 16 | WS sin manejo de `disconnect` (UI colgada) | Web + CLI | P1 | Bajo | ✅ PR #5 (mitad Web) / Handoff (mitad CLI) |
 | 17 | Mutaciones sin `catch` (aprobación fallida invisible) | Web | P1 | Bajo | ✅ PR #5 |
-| 18 | `js-yaml` prod con advisory alto | Core | P1 | Muy bajo | Pendiente |
-| 19 | `monaco-editor` → `dompurify` vulnerable | Web | P1 | Bajo | Pendiente |
+| 18 | `js-yaml` prod con advisory alto | Core | P1 | Muy bajo | ✅ PR #25 |
+| 19 | `monaco-editor` → `dompurify` vulnerable | Web | P1 | Bajo (severidad real: moderado/bajo) | ✅ PR #6 |
 | 20 | `test \|\| true` en CI; Web sin tests en CI | CLI + Web | P1 | Muy bajo | Handoff (mitad CLI) |
 | 20.b | Tipos del CLI desincronizados: `jin tasks` no muestra actor/inputs externos | CLI | **P0** | Bajo (handoff) | Handoff (Antigravity) |
 | 21 | Specs faltantes en piezas de seguridad | Core | P2 | Medio | Pendiente |
