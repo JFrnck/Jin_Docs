@@ -193,7 +193,7 @@ Ya documentado como gap conocido en `STATUS.md` (Fase 6.2+6.3): hoy es el `favic
 
 ### P1 — Robustez y correctitud
 
-#### 16. Nadie escucha `disconnect` del WebSocket: la UI queda colgada para siempre
+#### 16. ✅ RESUELTO (mitad Web) — Nadie escucha `disconnect` del WebSocket: la UI queda colgada para siempre
 
 **Verificado, en los dos clientes:**
 - `Jin_Web/app/features/chat/useChat.ts:30-63` — no registra handler de `disconnect`. Si el socket cae con `pending = true` esperando `chat:response`, el turno queda en "trabajando…" indefinidamente: sin timeout, sin error, sin reintento, y **sin poder mandar otro objetivo** porque `pending` nunca vuelve a `false`.
@@ -201,7 +201,9 @@ Ya documentado como gap conocido en `STATUS.md` (Fase 6.2+6.3): hoy es el `favic
 
 **Propuesta:** manejar `disconnect` en ambos: liberar el estado `pending` con un mensaje de error honesto ("se perdió la conexión, reintentá"), y en la CLI habilitar la reconexión de socket.io. **No** reenviar el turno automáticamente al reconectar — un turno de agente puede haber ejecutado tools con efectos reales; reintentarlo a ciegas es peor que pedirle al usuario que decida.
 
-#### 17. Mutaciones sin `catch` en el dashboard: una aprobación fallida se ve igual que una exitosa
+**Resuelto la mitad Web en [Jin_Web PR #5](https://github.com/JFrnck/Jin_Web/pull/5)** (2026-08-05): `useChat.ts` escucha `disconnect`, libera `pending` y marca el turno con un error explícito, sin reintento automático. **La mitad CLI sigue como handoff a Antigravity** (`Jin_CLI/source/api/ws-chat.ts` — `reconnection: false` explícito).
+
+#### 17. ✅ RESUELTO — Mutaciones sin `catch` en el dashboard: una aprobación fallida se ve igual que una exitosa
 
 **Verificado:** cuatro sitios usan mutaciones imperativas fuera de TanStack Query sin manejar el error —
 `Jin_Web/app/features/hitl/ApprovalCard.tsx:68-84` (`handleApprove`/`handleReject`, `try/finally` sin `catch`), `app/routes/preview.tsx:21-26` (`stop()` ignora `error` e invalida la query igual), `app/routes/budget.tsx:42-50` (`confirmUnpause()`), `app/routes/editor.tsx:58-83` (`requestComments()`).
@@ -209,6 +211,8 @@ Ya documentado como gap conocido en `STATUS.md` (Fase 6.2+6.3): hoy es el `favic
 **El grave es `ApprovalCard`:** si un dual-confirm expira en el servidor justo al confirmar (o el 409 de "segunda confirmación demasiado pronto" salta), la UI no muestra nada y el operador queda creyendo que **aprobó una acción irreversible que en realidad no se ejecutó**. Las rutas que usan `useQuery` directamente sí manejan `isError` bien — el gap está acotado a estas mutaciones.
 
 **Propuesta:** pasarlas por `useMutation` con `onError`, o al menos un `catch` que muestre el error. `unwrap()` (`api-client.ts`) ya lanza; solo falta que alguien lo agarre.
+
+**Resuelto en [Jin_Web PR #5](https://github.com/JFrnck/Jin_Web/pull/5)** (2026-08-05): `catch` + estado de error local en los 4 sitios, más `unwrap()` agregado a `preview.tsx`/`budget.tsx` (que hoy ni siquiera lanzaban — `openapi-fetch` no lanza por sí solo, así que el error se ignoraba por completo, no solo quedaba sin capturar). Nuevo `getErrorMessage()` en `api-client.ts`, reusado en los 4.
 
 #### 18. `js-yaml` de producción con un advisory alto (Jin_Core)
 
@@ -336,8 +340,8 @@ Ya documentado como gap conocido en `STATUS.md` (Fase 6.2+6.3): hoy es el `favic
 | 13 | `audit_log` pierde actor/inputs externos al resolver | Core | P0 | Bajo | ✅ PR #24 |
 | 14 | Contraseña de `jin login` en argv | CLI | P0 | Muy bajo | Handoff (Antigravity) |
 | 15 | Redis y `memory.db` sin verificación de restore | Infra | P0 | Bajo | Handoff (Antigravity) |
-| 16 | WS sin manejo de `disconnect` (UI colgada) | Web + CLI | P1 | Bajo | Pendiente (mitad Web es mía) |
-| 17 | Mutaciones sin `catch` (aprobación fallida invisible) | Web | P1 | Bajo | Pendiente |
+| 16 | WS sin manejo de `disconnect` (UI colgada) | Web + CLI | P1 | Bajo | ✅ PR #5 (mitad Web) / Handoff (mitad CLI) |
+| 17 | Mutaciones sin `catch` (aprobación fallida invisible) | Web | P1 | Bajo | ✅ PR #5 |
 | 18 | `js-yaml` prod con advisory alto | Core | P1 | Muy bajo | Pendiente |
 | 19 | `monaco-editor` → `dompurify` vulnerable | Web | P1 | Bajo | Pendiente |
 | 20 | `test \|\| true` en CI; Web sin tests en CI | CLI + Web | P1 | Muy bajo | Handoff (mitad CLI) |

@@ -9,7 +9,7 @@
 ### Claude Code
 
 - **Repo:** `Jin_Core`. **Recomendación #1** (readiness/liveness probes) implementada — [PR #22](https://github.com/JFrnck/Jin_Core/pull/22). **Recomendación #2** (poda + compresión del historial de chat) implementada — [PR #23](https://github.com/JFrnck/Jin_Core/pull/23), ver sección dedicada abajo.
-- **Próximo:** ejecutando **Fase 0.1 debug #1** (corrección de la Ronda 2 de `docs/RECOMENDACIONES.md`, pedida por el owner 2026-08-05). Punto 10 (zip-slip) + 26 (límites del init container) cerrados, punto 28 (`readOnlyRootFilesystem`) abierto tras revertirse por un cuelgue real en CI — [Jin_Executor PR #6](https://github.com/JFrnck/Jin_Executor/pull/6), CI verde. Punto 11 (notificaciones muertas) + 12 (lock persistido) + 13 (traza al resolver) cerrados — [Jin_Core PR #24](https://github.com/JFrnck/Jin_Core/pull/24), CI en curso. Siguiente en la cola: 16 (mitad Web) + 17 + 18 + 19 (`Jin_Web`/`Jin_Core`). PRs #22 y #23 (Fase 0.1 Ronda 1) siguen esperando revisión/merge del owner.
+- **Próximo:** ejecutando **Fase 0.1 debug #1** (corrección de la Ronda 2 de `docs/RECOMENDACIONES.md`, pedida por el owner 2026-08-05). Cerrados: 10+26 ([Jin_Executor PR #6](https://github.com/JFrnck/Jin_Executor/pull/6), CI verde, punto 28 quedó abierto — ver sección dedicada), 11+12+13 ([Jin_Core PR #24](https://github.com/JFrnck/Jin_Core/pull/24), CI verde), 16 (mitad Web)+17 ([Jin_Web PR #5](https://github.com/JFrnck/Jin_Web/pull/5), CI verde). Quedan de mi lado: 18 (bump `js-yaml`, Core) + 19 (bump `monaco-editor`, Web) — ambos requieren planning mode por ser cambio de dependencias (`Jin_Docs/CLAUDE.md` §2.1). El resto de la Fase 0.1 (14, 15, 16 mitad CLI, 20 mitad CLI, 20.b, 25, la mayoría de 21-23, 24) es de Antigravity o deuda de fondo — PRs #22 y #23 (Fase 0.1 Ronda 1) siguen esperando revisión/merge del owner.
 - **Handoffs abiertos hacia Antigravity (`Jin_CLI`):** (a) adoptar `compactedHistory` o el PR #23 queda sin consumidor real; (b) **regenerar `source/api-types.ts`** — está desincronizado desde el PR #21 y por eso `jin tasks` no muestra `actor`/`externalInputsSummary`, ver Recomendación 20.b.
 
 ### Antigravity
@@ -211,7 +211,7 @@ El owner pidió corregir los 18 puntos de la Ronda 2 de `docs/RECOMENDACIONES.md
 - [x] 10 (zip-slip) + 26 (límites del init container) — Jin_Executor. [PR #6](https://github.com/JFrnck/Jin_Executor/pull/6). `readOnlyRootFilesystem` (mitad del punto 10) se intentó y se revirtió por un cuelgue real en el CI de K3s — ver punto 28 nuevo. De paso: regenerado `Jin_Executor/contracts/openapi.json`, desactualizado desde Fase 5.5 (punto 27 nuevo).
 - [ ] 28 (nuevo) — Jin_Executor: `readOnlyRootFilesystem` en preview-service, pendiente de clúster K3s real para diagnosticar por qué cuelga el smoke test.
 - [x] 11 + 12 + 13 — Jin_Core (`src/hitl`, `src/audit`): 3 notificaciones muertas → Telegram real, lock de audit chain persistido, `audit_log` conserva actor/inputs externos al resolver. [PR #24](https://github.com/JFrnck/Jin_Core/pull/24), CI en curso.
-- [ ] 16 (mitad Web) + 17 — Jin_Web: manejo de `disconnect` del WS, mutaciones de `ApprovalCard`/`preview`/`budget`/`editor` sin `catch`.
+- [x] 16 (mitad Web) + 17 — Jin_Web: manejo de `disconnect` del WS, mutaciones de `ApprovalCard`/`preview`/`budget`/`editor` sin `catch`. [PR #5](https://github.com/JFrnck/Jin_Web/pull/5), CI verde.
 - [ ] 18 — Jin_Core: bump `js-yaml` (advisory alto, dependencia de producción).
 - [ ] 19 — Jin_Web: `monaco-editor`→`dompurify` vulnerable, evaluar upgrade.
 - [ ] 3 + 4 + 5 (Ronda 1, seguían sin tocar) — Jin_Core: `.env` en scripts standalone, colisión Redis e2e, heap de Node en tooling.
@@ -317,6 +317,14 @@ El owner preguntó si las fases pendientes cubrían todas las funciones que Jin 
 - **PgBouncer (§3.3):** entra cuando Postgres muestre presión real de conexiones. Con 1 réplica de core y un solo usuario, hoy no hay caso.
 
 **No son gaps** (desviaciones ya decididas y documentadas): BullMQ descartado (el diagrama de arquitectura de §2 quedó desactualizado, es solo el diagrama), Alertmanager reemplazado por Telegram directo (Fase 4.1), MCP servers y chaos tests ya cubiertos por 7.3, manifests de deploy ya cubiertos por 7.1.
+
+## Fase 0.1 debug #1 — punto 16 (mitad Web) + 17 resuelto (Jin_Web PR #5, 2026-08-05)
+
+**#16 — WS sin manejo de `disconnect`.** `useChat.ts` no escuchaba `disconnect`: si la conexión se caía a mitad de un turno, `pending` quedaba en `true` para siempre — el botón de enviar seguía deshabilitado y el turno mostraba "trabajando…" sin fin. Ahora libera `pending` y marca el turno con un error explícito al desconectarse. Deliberadamente **no** reintenta el turno automáticamente al reconectar — pudo haber ejecutado tools con efectos reales. Mitad CLI (`Jin_CLI/source/api/ws-chat.ts`, `reconnection: false` explícito) queda como handoff a Antigravity.
+
+**#17 — mutaciones que ignoraban o no manejaban errores.** Dos patrones del mismo problema: `preview.tsx`/`budget.tsx` llamaban a `api.DELETE`/`api.POST` sin `unwrap()` (openapi-fetch no lanza por sí solo, el fallo se ignoraba por completo); `ApprovalCard.tsx`/`editor.tsx` sí podían lanzar pero solo tenían `finally`, sin `catch`. El caso grave es `ApprovalCard`: un fallo real (ej. 409 de dual-confirm demasiado pronto) no mostraba nada — el owner podía creer que aprobó/rechazó algo que en realidad no se ejecutó. Fix uniforme: `unwrap()` donde faltaba + `catch` con error local visible, mismo estilo que `chat.tsx`. Nuevo `getErrorMessage()` en `api-client.ts`.
+
+**No verificado en navegador real:** el dev server y el build de preview no levantan en esta máquina — `/etc/hosts` no tiene el mapeo estándar `127.0.0.1 localhost` (confirmado que falla igual en `main` sin ningún cambio, no relacionado a este trabajo). `pnpm run typecheck`/`lint` limpios; CI (GitHub Actions) verde, sin ese problema de entorno.
 
 ## Fase 0.1 debug #1 — punto 11+12+13 resuelto (Jin_Core PR #24, 2026-08-05)
 
