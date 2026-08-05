@@ -9,7 +9,7 @@
 ### Claude Code
 
 - **Repo:** `Jin_Core`. **Recomendación #1** (readiness/liveness probes) implementada — [PR #22](https://github.com/JFrnck/Jin_Core/pull/22). **Recomendación #2** (poda + compresión del historial de chat) implementada — [PR #23](https://github.com/JFrnck/Jin_Core/pull/23), ver sección dedicada abajo.
-- **Próximo:** sin tarea propia asignada. Ambos P0 de la Ronda 1 de `docs/RECOMENDACIONES.md` cerrados; PRs #22 y #23 esperando revisión/merge del owner. **Nueva: Ronda 2 de recomendaciones** (auditoría cross-repo de los 6 repos, 2026-08-05) — 18 puntos nuevos sin implementar, ver abajo y el documento completo. Fase 7.1 (deploy real) sigue siendo de Antigravity.
+- **Próximo:** ejecutando **Fase 0.1 debug #1** (corrección de la Ronda 2 de `docs/RECOMENDACIONES.md`, pedida por el owner 2026-08-05). Punto 10+26 cerrado ([Jin_Executor PR #6](https://github.com/JFrnck/Jin_Executor/pull/6)). Siguiente en la cola: 11+12+13 (`Jin_Core` `src/hitl`/`src/audit`). PRs #22 y #23 (Fase 0.1 Ronda 1) siguen esperando revisión/merge del owner.
 - **Handoffs abiertos hacia Antigravity (`Jin_CLI`):** (a) adoptar `compactedHistory` o el PR #23 queda sin consumidor real; (b) **regenerar `source/api-types.ts`** — está desincronizado desde el PR #21 y por eso `jin tasks` no muestra `actor`/`externalInputsSummary`, ver Recomendación 20.b.
 
 ### Antigravity
@@ -208,7 +208,7 @@ Dependencias: 5.1 → (5.2, 5.3, 5.4) → 5.5 (tras 5.2) → 6.1 → (6.2+6.3 en
 El owner pidió corregir los 18 puntos de la Ronda 2 de `docs/RECOMENDACIONES.md` (10-26 + 20.b). Numerada "0.1" a propósito — es deuda encontrada, no una fase nueva del producto; no reordena el roadmap de arriba, corre en paralelo. Split por dueño real de cada repo (`docs/WORKFLOW.md` §2):
 
 **[Claude Code] — en ejecución esta sesión:**
-- [ ] 10 + 26 — Jin_Executor: zip-slip en `files` de `startPreviewService` + `readOnlyRootFilesystem` + límites del init container.
+- [x] 10 + 26 — Jin_Executor: zip-slip en `files` de `startPreviewService` + `readOnlyRootFilesystem` + límites del init container. [PR #6](https://github.com/JFrnck/Jin_Executor/pull/6), CI corriendo. De paso: regenerado `Jin_Executor/contracts/openapi.json`, desactualizado desde Fase 5.5 (punto 27 nuevo, ver `RECOMENDACIONES.md`).
 - [ ] 11 + 12 + 13 — Jin_Core (`src/hitl`, `src/audit`): 3 notificaciones muertas → Telegram real, lock de audit chain persistido, `audit_log` conserva actor/inputs externos al resolver.
 - [ ] 16 (mitad Web) + 17 — Jin_Web: manejo de `disconnect` del WS, mutaciones de `ApprovalCard`/`preview`/`budget`/`editor` sin `catch`.
 - [ ] 18 — Jin_Core: bump `js-yaml` (advisory alto, dependencia de producción).
@@ -316,6 +316,20 @@ El owner preguntó si las fases pendientes cubrían todas las funciones que Jin 
 - **PgBouncer (§3.3):** entra cuando Postgres muestre presión real de conexiones. Con 1 réplica de core y un solo usuario, hoy no hay caso.
 
 **No son gaps** (desviaciones ya decididas y documentadas): BullMQ descartado (el diagrama de arquitectura de §2 quedó desactualizado, es solo el diagrama), Alertmanager reemplazado por Telegram directo (Fase 4.1), MCP servers y chaos tests ya cubiertos por 7.3, manifests de deploy ya cubiertos por 7.1.
+
+## Fase 0.1 debug #1 — punto 10+26 resuelto (Jin_Executor PR #6, 2026-08-05)
+
+Zip-slip en `startPreviewService`: la clave de `files` se escribía sin sanear en el header USTAR (`tar-payload.ts`), y el init container la extrae con `tar xz -C /workspace` — una clave `"../../app/evil.js"` escapaba del directorio de trabajo. Se agravaba porque el container `app` no tenía `readOnlyRootFilesystem`: había a dónde escribir. El `hitlLevel: confirm` de la tool no lo cubre (el owner aprueba un `planSummary`, no audita cada clave del mapa).
+
+**Defensa en dos capas:** `isSafeRelativePath()` nueva (rechaza absolutos y cualquier segmento `..`, por segmento no substring — `"foo..bar.js"` sigue siendo válido) llamada tanto dentro de `buildTarGzBase64` (capa más profunda) como en `preview-service-request.schema.ts` vía `.refine()` (falla con 400 en el borde HTTP). Más `readOnlyRootFilesystem: true` en el container `app` (alineado con el pod de `runCode`, que ya lo tenía) + volumen `emptyDir` en `/tmp` para no romper herramientas genéricas que escriben ahí (pnpm ya redirige su cache a `/pnpm-store`).
+
+**Verificación del cambio de comportamiento, no solo "debería andar":** antes de decidir `readOnlyRootFilesystem`, se revisó el único test de integración que corre la app real contra K3s vivo — usa `require("http")` puro de Node, sin escritura a disco. El endurecimiento no debería romperlo. Documentado como trade-off real para apps futuras que sí escriban fuera de `/workspace`/`/pnpm-store`/`/tmp`.
+
+**Punto 26 (mismo PR):** el init container `extract-workspace` no declaraba `resources`, dependía enteramente del `LimitRange` de `agents-sandbox` (Jin_Infra, otro repo). Ahora declara los suyos (250m/256Mi request, 500m/512Mi limit).
+
+**Hallazgo lateral, corregido de paso (punto 27 nuevo):** `contracts/openapi.json` de este repo estaba desactualizado desde el PR #5 (Fase 5.5) — faltaban los 3 endpoints `/services*` por completo. Regenerado. Sin impacto en consumidores reales (`Jin_Core/src/executor-client/` está escrito a mano, no generado desde este contrato).
+
+**Verificación:** 87 unit (14 archivos, +12 tests nuevos) + 5 e2e, `tsc --noEmit`/`lint`/`build` limpios, contrato regenerado. `test:integration` (K3s real) no se pudo correr localmente (Docker apagado) — CI del PR en curso.
 
 ## Ronda 2 de recomendaciones — auditoría cross-repo (2026-08-05)
 

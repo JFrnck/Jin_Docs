@@ -117,7 +117,7 @@ Ya documentado como gap conocido en `STATUS.md` (Fase 6.2+6.3): hoy es el `favic
 
 ### P0 — Seguridad e integridad, antes del deploy real
 
-#### 10. Zip-slip en `startPreviewService`: un `files` malicioso escribe fuera de `/workspace`
+#### 10. ✅ RESUELTO — Zip-slip en `startPreviewService`: un `files` malicioso escribe fuera de `/workspace`
 
 **Verificado:** `Jin_Executor/src/preview-service/preview-service-request.schema.ts:9` valida `files: z.record(z.string().min(1), z.string())` — la clave es el path de destino y **no se restringe su contenido**. `tar-payload.ts:71-85` escribe esa clave tal cual en el header USTAR sin sanear `../` ni rutas absolutas, y el init container la extrae con `tar xz -C /workspace` (`service-pod-spec.builder.ts:88`). Una clave `"../../app/evil.js"` escapa del directorio de trabajo.
 
@@ -128,6 +128,8 @@ Ya documentado como gap conocido en `STATUS.md` (Fase 6.2+6.3): hoy es el `favic
 **Propuesta:** rechazar en el schema Zod toda clave que sea absoluta o contenga `..` (fail-fast, antes de construir el tar), **y** poner `readOnlyRootFilesystem: true` + un `emptyDir` escribible solo donde haga falta. Los dos, no uno: defensa en profundidad. Cubrirlo con un test explícito — `tar-payload.spec.ts` y `service-pod-spec.builder.spec.ts` hoy no prueban ningún path con `..`.
 
 **Esfuerzo:** bajo. **Riesgo de no hacerlo:** el único camino del sistema donde un LLM controla nombres de archivo escritos a disco no tiene barrera.
+
+**Resuelto en [Jin_Executor PR #6](https://github.com/JFrnck/Jin_Executor/pull/6)** (2026-08-05): `isSafeRelativePath()` en dos capas (`tar-payload.ts` + Zod en el borde HTTP), `readOnlyRootFilesystem: true` en el container `app` + `emptyDir` en `/tmp`. Verificado contra el único test de integración con K3s vivo (app real usa `require("http")` puro, sin escritura a disco) antes de asumir que el endurecimiento no rompía nada. **Hallazgo lateral corregido de paso:** `Jin_Executor/contracts/openapi.json` estaba desactualizado desde el PR #5 (Fase 5.5) — faltaban los 3 endpoints `/services*` por completo. Sin impacto en consumidores (el `executor-client` de Jin_Core está escrito a mano, no generado desde ese contrato) — era deuda de documentación pura.
 
 #### 11. Tres notificaciones críticas quedaron esperando una fase que ya se completó
 
@@ -272,11 +274,21 @@ Ya documentado como gap conocido en `STATUS.md` (Fase 6.2+6.3): hoy es el `favic
 
 **Propuesta:** pinnear el instalador a un hash conocido o usar el binario firmado del release. Es una VM que se bootstrapea una vez cada mucho tiempo, así que la prioridad es baja — pero es el momento de mayor privilegio de todo el ciclo de vida del sistema.
 
-#### 26. Init container de preview-service sin límites de recursos propios
+#### 26. ✅ RESUELTO — Init container de preview-service sin límites de recursos propios
 
 **Verificado:** `Jin_Executor/src/preview-service/service-pod-spec.builder.ts:81-105` — el container `extract-workspace` no define `resources`, a diferencia del container `app` (`:130-136`) y del pod de `runCode` (`pod-spec.builder.ts:89-92`). Depende enteramente de que el `LimitRange` de `agents-sandbox` (que vive en `Jin_Infra`, otro repo) inyecte defaults y cubra init containers. El tamaño de `files` no está acotado por schema (documentado en `preview-service-request.schema.ts:6-8`).
 
 **Propuesta:** declarar `resources` explícitos en el init container, sin depender de un default que vive en otro repo.
+
+**Resuelto en [Jin_Executor PR #6](https://github.com/JFrnck/Jin_Executor/pull/6)** (2026-08-05), junto con el punto 10 — mismo archivo, mismo PR.
+
+#### 27. (nuevo, encontrado al cerrar 10/26) `Jin_Executor/contracts/openapi.json` llevaba desactualizado desde Fase 5.5
+
+**Verificado:** regenerar el contrato en el PR #6 agregó 58 líneas — los 3 endpoints `POST /services`, `GET /services`, `DELETE /services/{id}` faltaban por completo. `git log --oneline -- contracts/openapi.json` confirma que el archivo no se tocó desde el PR #3/#4 (Fase 5.2/rename), es decir desde **antes** de que existiera el controller de preview services (PR #5).
+
+**Por qué importa poco hoy, pero conviene cerrar:** `Jin_Core/src/executor-client/` (el único consumidor real de esta API) está escrito a mano, no generado desde este contrato — así que no hay ningún bug de tipos en producción por esto, a diferencia del punto 20.b. Es deuda de documentación pura: `/docs` (Swagger UI del Executor) miente sobre su propia superficie, y si algún día alguien generara un cliente desde este contrato (mismo patrón que Web/CLI con Core), heredaría el hueco.
+
+**Propuesta:** ya regenerado en el PR #6. Vale la pena que el CI de `Jin_Executor` corra `generate:contract` y falle si hay diff sin commitear (mismo problema de fondo que el punto 20: nada impide que un contrato se desincronice en silencio).
 
 ---
 
@@ -296,28 +308,29 @@ Ya documentado como gap conocido en `STATUS.md` (Fase 6.2+6.3): hoy es el `favic
 | 8 | Diagrama §2 desactualizado | P3 | Muy bajo | Pendiente |
 | 9 | Iconos PWA reales | P3 | — (diseño) | Pendiente |
 
-**Ronda 2** (puntos 10-26):
+**Ronda 2** (puntos 10-27):
 
-| # | Recomendación | Repo | Prioridad | Esfuerzo |
-| --- | --- | --- | --- | --- |
-| 10 | Zip-slip en `files` + `readOnlyRootFilesystem` | Executor | P0 | Bajo |
-| 11 | 3 notificaciones muertas esperando "Fase 2.4" | Core | P0 | Bajo |
-| 12 | Lock del audit log no persiste a un restart | Core | P0 | Bajo |
-| 13 | `audit_log` pierde actor/inputs externos al resolver | Core | P0 | Bajo |
-| 14 | Contraseña de `jin login` en argv | CLI | P0 | Muy bajo |
-| 15 | Redis y `memory.db` sin verificación de restore | Infra | P0 | Bajo |
-| 16 | WS sin manejo de `disconnect` (UI colgada) | Web + CLI | P1 | Bajo |
-| 17 | Mutaciones sin `catch` (aprobación fallida invisible) | Web | P1 | Bajo |
-| 18 | `js-yaml` prod con advisory alto | Core | P1 | Muy bajo |
-| 19 | `monaco-editor` → `dompurify` vulnerable | Web | P1 | Bajo |
-| 20 | `test \|\| true` en CI; Web sin tests en CI | CLI + Web | P1 | Muy bajo |
-| 20.b | Tipos del CLI desincronizados: `jin tasks` no muestra actor/inputs externos | CLI | **P0** | Bajo (handoff) |
-| 21 | Specs faltantes en piezas de seguridad | Core | P2 | Medio |
-| 22 | Cero tests de cualquier tipo | Web | P2 | Medio |
-| 23 | Cobertura mínima | CLI | P2 | Medio |
-| 24 | Cablear probes al crear el Deployment | Infra | P3 | — (handoff) |
-| 25 | `curl \| sh` sin checksum | Infra | P3 | Bajo |
-| 26 | Init container sin `resources` | Executor | P3 | Muy bajo |
+| # | Recomendación | Repo | Prioridad | Esfuerzo | Estado |
+| --- | --- | --- | --- | --- | --- |
+| 10 | Zip-slip en `files` + `readOnlyRootFilesystem` | Executor | P0 | Bajo | ✅ PR #6 |
+| 11 | 3 notificaciones muertas esperando "Fase 2.4" | Core | P0 | Bajo | Pendiente |
+| 12 | Lock del audit log no persiste a un restart | Core | P0 | Bajo | Pendiente |
+| 13 | `audit_log` pierde actor/inputs externos al resolver | Core | P0 | Bajo | Pendiente |
+| 14 | Contraseña de `jin login` en argv | CLI | P0 | Muy bajo | Handoff (Antigravity) |
+| 15 | Redis y `memory.db` sin verificación de restore | Infra | P0 | Bajo | Handoff (Antigravity) |
+| 16 | WS sin manejo de `disconnect` (UI colgada) | Web + CLI | P1 | Bajo | Pendiente (mitad Web es mía) |
+| 17 | Mutaciones sin `catch` (aprobación fallida invisible) | Web | P1 | Bajo | Pendiente |
+| 18 | `js-yaml` prod con advisory alto | Core | P1 | Muy bajo | Pendiente |
+| 19 | `monaco-editor` → `dompurify` vulnerable | Web | P1 | Bajo | Pendiente |
+| 20 | `test \|\| true` en CI; Web sin tests en CI | CLI + Web | P1 | Muy bajo | Handoff (mitad CLI) |
+| 20.b | Tipos del CLI desincronizados: `jin tasks` no muestra actor/inputs externos | CLI | **P0** | Bajo (handoff) | Handoff (Antigravity) |
+| 21 | Specs faltantes en piezas de seguridad | Core | P2 | Medio | Pendiente |
+| 22 | Cero tests de cualquier tipo | Web | P2 | Medio | Pendiente |
+| 23 | Cobertura mínima | CLI | P2 | Medio | Handoff (Antigravity) |
+| 24 | Cablear probes al crear el Deployment | Infra | P3 | — (handoff) | Handoff (Fase 7.1) |
+| 25 | `curl \| sh` sin checksum | Infra | P3 | Bajo | Handoff (Antigravity) |
+| 26 | Init container sin `resources` | Executor | P3 | Muy bajo | ✅ PR #6 |
+| 27 | Contrato OpenAPI de Executor desactualizado desde Fase 5.5 | Executor | P3 | Muy bajo | ✅ PR #6 |
 
 **Mi recomendación de secuencia:**
 
