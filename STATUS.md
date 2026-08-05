@@ -9,7 +9,7 @@
 ### Claude Code
 
 - **Repo:** `Jin_Core`. **Recomendación #1** (readiness/liveness probes) implementada — [PR #22](https://github.com/JFrnck/Jin_Core/pull/22). **Recomendación #2** (poda + compresión del historial de chat) implementada — [PR #23](https://github.com/JFrnck/Jin_Core/pull/23), ver sección dedicada abajo.
-- **Próximo:** ejecutando **Fase 0.1 debug #1** (corrección de la Ronda 2 de `docs/RECOMENDACIONES.md`, pedida por el owner 2026-08-05). Punto 10 (zip-slip) + 26 (límites del init container) cerrados, punto 28 (`readOnlyRootFilesystem`) abierto tras revertirse por un cuelgue real en CI — ver sección dedicada ([Jin_Executor PR #6](https://github.com/JFrnck/Jin_Executor/pull/6)). Siguiente en la cola: 11+12+13 (`Jin_Core` `src/hitl`/`src/audit`). PRs #22 y #23 (Fase 0.1 Ronda 1) siguen esperando revisión/merge del owner.
+- **Próximo:** ejecutando **Fase 0.1 debug #1** (corrección de la Ronda 2 de `docs/RECOMENDACIONES.md`, pedida por el owner 2026-08-05). Punto 10 (zip-slip) + 26 (límites del init container) cerrados, punto 28 (`readOnlyRootFilesystem`) abierto tras revertirse por un cuelgue real en CI — [Jin_Executor PR #6](https://github.com/JFrnck/Jin_Executor/pull/6), CI verde. Punto 11 (notificaciones muertas) + 12 (lock persistido) + 13 (traza al resolver) cerrados — [Jin_Core PR #24](https://github.com/JFrnck/Jin_Core/pull/24), CI en curso. Siguiente en la cola: 16 (mitad Web) + 17 + 18 + 19 (`Jin_Web`/`Jin_Core`). PRs #22 y #23 (Fase 0.1 Ronda 1) siguen esperando revisión/merge del owner.
 - **Handoffs abiertos hacia Antigravity (`Jin_CLI`):** (a) adoptar `compactedHistory` o el PR #23 queda sin consumidor real; (b) **regenerar `source/api-types.ts`** — está desincronizado desde el PR #21 y por eso `jin tasks` no muestra `actor`/`externalInputsSummary`, ver Recomendación 20.b.
 
 ### Antigravity
@@ -210,7 +210,7 @@ El owner pidió corregir los 18 puntos de la Ronda 2 de `docs/RECOMENDACIONES.md
 **[Claude Code] — en ejecución esta sesión:**
 - [x] 10 (zip-slip) + 26 (límites del init container) — Jin_Executor. [PR #6](https://github.com/JFrnck/Jin_Executor/pull/6). `readOnlyRootFilesystem` (mitad del punto 10) se intentó y se revirtió por un cuelgue real en el CI de K3s — ver punto 28 nuevo. De paso: regenerado `Jin_Executor/contracts/openapi.json`, desactualizado desde Fase 5.5 (punto 27 nuevo).
 - [ ] 28 (nuevo) — Jin_Executor: `readOnlyRootFilesystem` en preview-service, pendiente de clúster K3s real para diagnosticar por qué cuelga el smoke test.
-- [ ] 11 + 12 + 13 — Jin_Core (`src/hitl`, `src/audit`): 3 notificaciones muertas → Telegram real, lock de audit chain persistido, `audit_log` conserva actor/inputs externos al resolver.
+- [x] 11 + 12 + 13 — Jin_Core (`src/hitl`, `src/audit`): 3 notificaciones muertas → Telegram real, lock de audit chain persistido, `audit_log` conserva actor/inputs externos al resolver. [PR #24](https://github.com/JFrnck/Jin_Core/pull/24), CI en curso.
 - [ ] 16 (mitad Web) + 17 — Jin_Web: manejo de `disconnect` del WS, mutaciones de `ApprovalCard`/`preview`/`budget`/`editor` sin `catch`.
 - [ ] 18 — Jin_Core: bump `js-yaml` (advisory alto, dependencia de producción).
 - [ ] 19 — Jin_Web: `monaco-editor`→`dompurify` vulnerable, evaluar upgrade.
@@ -317,6 +317,20 @@ El owner preguntó si las fases pendientes cubrían todas las funciones que Jin 
 - **PgBouncer (§3.3):** entra cuando Postgres muestre presión real de conexiones. Con 1 réplica de core y un solo usuario, hoy no hay caso.
 
 **No son gaps** (desviaciones ya decididas y documentadas): BullMQ descartado (el diagrama de arquitectura de §2 quedó desactualizado, es solo el diagrama), Alertmanager reemplazado por Telegram directo (Fase 4.1), MCP servers y chaos tests ya cubiertos por 7.3, manifests de deploy ya cubiertos por 7.1.
+
+## Fase 0.1 debug #1 — punto 11+12+13 resuelto (Jin_Core PR #24, 2026-08-05)
+
+Los tres viven en el mismo tejido: el sistema HITL/audit no le avisa al humano ni conserva su propio rastro cuando más importa.
+
+**#11 — tres notificaciones muertas.** `timeout.service.ts` (escalado a 12h, abandono a 24h) y `chain-verification.service.ts` (audit chain corrupta) diferían su notificación a "Fase 2.4 (bot Telegram)" — cerrada hace semanas, nunca recableada. `TimeoutService` ahora emite `HITL_APPROVAL_ESCALATED_EVENT`/`HITL_APPROVAL_ABANDONED_EVENT` vía `EventEmitter2` (mismo mecanismo que `PENDING_APPROVAL_CREATED_EVENT`, ya usado por `realtime.gateway.ts`); `TelegramBotService` los escucha con `@OnEvent`. La corrupción del audit log usa **polling**, no evento (`checkAuditIntegrityAlert`, cron de 5 min sobre `isLocked()`, mismo criterio que `checkKillSwitchAlert` — es un booleano persistente, no un suceso puntual). Ambos mecanismos evitan el import circular `HitlModule`/`AuditModule` → `TelegramModule` que una inyección directa hubiera creado.
+
+**#12 — el lock del audit log no persistía.** Nueva tabla singleton `audit_chain_lock` (migración 0007), mismo patrón que `budget_kill_switch`. `isLocked()`/`unlock()` pasan a async. **Bug crítico encontrado en el camino:** `AuditService.appendRow()` chequeaba `if (this.chainVerification.isLocked())` sin `await` — con el método vuelto async eso habría sido *siempre* truthy (un `Promise` nunca es falsy), bloqueando TODAS las escrituras del audit log permanentemente, el modo de falla exactamente opuesto al que ese chequeo existe para prevenir. Corregido con el `await` explícito.
+
+**#13 — `audit_log` perdía actor/inputs externos al resolver.** El diseño inicial (copiar los campos a `recordApproval`/`recordRejection`) se descartó a mitad de implementación: hubiera sobrecargado el campo `actor` existente, que ahí significa "quién aprobó" (siempre el owner), no "quién pidió la tool". El fix real va en el choke point: `DualConfirmService.createPendingApproval()` ahora escribe una fila `tool_call`/`approvalStatus:'pending'` permanente en `audit_log` al crear el pending (vía `AuditService.recordToolCall`, mismo patrón que ya usan las tools auto/notify) — correlacionada por `requestId` con la fila terminal, sin duplicar el dato. Cubre los 5 callers reales (`agent.service.ts`, `orchestrator.service.ts`, `google-calendar-tools.service.ts`, `google-gmail-tools.service.ts`) sin tocar ninguno.
+
+**Efecto colateral esperado y corregido:** varios tests de integración asumían que `createPendingApproval` no dejaba rastro en `audit_log` (0 filas) o que solo la resolución dejaba 1 — ahora hay una fila más desde el momento de creación. 4 archivos actualizados con la nueva cuenta esperada y comentarios explicando el porqué. También se encontró y corrigió un gap real de wiring: `timeout.service.integration.spec.ts` no importaba `EventEmitterModule`, necesario ahora que `TimeoutService` depende de `EventEmitter2` — sin el fix, ese test hubiera fallado en CI con un error de resolución de dependencias.
+
+**Verificación:** 352 unit (57 archivos, +2 specs nuevos que no existían — `chain-verification.service.spec.ts`/`timeout.service.spec.ts`, cierran de paso parte de la Recomendación #21) + 19 e2e, `tsc --noEmit`/`lint`/`build` limpios, contrato sin diff (no se tocó ningún controller). `test:integration` no se pudo correr localmente (Docker apagado) — CI del PR en curso.
 
 ## Fase 0.1 debug #1 — punto 10+26 resuelto, punto 28 abierto (Jin_Executor PR #6, 2026-08-05)
 

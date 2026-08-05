@@ -131,7 +131,7 @@ Ya documentado como gap conocido en `STATUS.md` (Fase 6.2+6.3): hoy es el `favic
 
 **Resuelto en [Jin_Executor PR #6](https://github.com/JFrnck/Jin_Executor/pull/6)** (2026-08-05): `isSafeRelativePath()` en dos capas (`tar-payload.ts` + Zod en el borde HTTP) — esto es lo que cierra el zip-slip en sí, y está confirmado por CI real con K3s vivo. **`readOnlyRootFilesystem: true` en el container `app` se intentó como defensa en profundidad adicional y se revirtió en el mismo PR:** el CI real (no una sospecha) mostró el smoke test "camino feliz" colgado 180s, con cuatro minutos de silencio total en el log — ni siquiera el timeout propio de `waitUntilPodRunning` (60s) llegó a dispararse, lo que apunta a algo más temprano que el pod nunca sirviendo HTTP, distinto de la flakiness de red ya documentada en ADR 0003 (esa es rápida, con reintentos que sí loguean). Sin acceso a un clúster K3s real para diagnosticar la causa exacta, no se forzó el cambio sin poder verificarlo — queda documentado en el código como intentado y revertido, no descartado en silencio, pendiente de retomar con logging más granular en el test o acceso a un clúster real. **La corrección primaria (el zip-slip) no depende de esto** y queda cerrada. **Hallazgo lateral corregido de paso:** `Jin_Executor/contracts/openapi.json` estaba desactualizado desde el PR #5 (Fase 5.5) — faltaban los 3 endpoints `/services*` por completo. Sin impacto en consumidores (el `executor-client` de Jin_Core está escrito a mano, no generado desde ese contrato) — era deuda de documentación pura.
 
-#### 11. Tres notificaciones críticas quedaron esperando una fase que ya se completó
+#### 11. ✅ RESUELTO — Tres notificaciones críticas quedaron esperando una fase que ya se completó
 
 **Verificado:** tres callers difieren su notificación a "Fase 2.4 (bot Telegram)" — una fase **cerrada desde el PR #5**, hace semanas. Ninguno se recableó:
 
@@ -145,7 +145,9 @@ Ya documentado como gap conocido en `STATUS.md` (Fase 6.2+6.3): hoy es el `favic
 
 **Esfuerzo:** bajo. **Riesgo de no hacerlo:** el HITL parece completo y no lo está; el modo de falla es silencioso, que es el peor para un sistema de aprobaciones.
 
-#### 12. El bloqueo del audit log por corrupción no sobrevive a un redeploy
+**Resuelto en [Jin_Core PR #24](https://github.com/JFrnck/Jin_Core/pull/24)** (2026-08-05): `TimeoutService` emite eventos (`HITL_APPROVAL_ESCALATED_EVENT`/`HITL_APPROVAL_ABANDONED_EVENT`) que `TelegramBotService` escucha con `@OnEvent`; la corrupción del audit log se resuelve con polling (`checkAuditIntegrityAlert`, mismo criterio que el kill switch) — evita el import circular que una inyección directa hubiera creado.
+
+#### 12. ✅ RESUELTO — El bloqueo del audit log por corrupción no sobrevive a un redeploy
 
 **Verificado:** `ChainVerificationService.locked` (`chain-verification.service.ts:17`) es un booleano **en memoria**. Si el barrido diario detecta corrupción, bloquea escrituras (`audit.service.ts:151` lo consulta) — pero un restart del pod lo devuelve a `false` y las escrituras se reanudan sobre una cadena corrupta, sin que nadie intervenga.
 
@@ -155,7 +157,9 @@ Ya documentado como gap conocido en `STATUS.md` (Fase 6.2+6.3): hoy es el `favic
 
 **Esfuerzo:** bajo (el patrón ya existe, se copia). **Riesgo de no hacerlo:** la garantía "un audit log corrupto es peor que uno detenido" (regla de oro del propio módulo) se rompe con un `kubectl rollout restart`.
 
-#### 13. El audit log permanente pierde `actor` y `external_inputs_summary` al resolverse
+**Resuelto en [Jin_Core PR #24](https://github.com/JFrnck/Jin_Core/pull/24)** (2026-08-05): tabla singleton `audit_chain_lock` (migración 0007), mismo patrón que `budget_kill_switch`. **Bug crítico encontrado en el camino:** `AuditService.appendRow()` chequeaba `isLocked()` sin `await` — con el método vuelto async eso habría sido siempre truthy (un `Promise` nunca es falsy), bloqueando TODAS las escrituras del audit log permanentemente. Corregido con el `await` explícito.
+
+#### 13. ✅ RESUELTO — El audit log permanente pierde `actor` y `external_inputs_summary` al resolverse
 
 **Verificado:** `AuditService.recordApproval` (`audit.service.ts:69-85`) y `recordRejection` (`:87-104`) hardcodean `externalInputsSummary: null` y **ni siquiera reciben `actor`** en su input. Esos dos datos sí viven en `pending_approvals` (columnas agregadas en el PR #21), pero esa fila **se borra al resolver** (`dual-confirm.service.ts:168`, documentado en `schema.ts:47`).
 
@@ -164,6 +168,8 @@ Ya documentado como gap conocido en `STATUS.md` (Fase 6.2+6.3): hoy es el `favic
 **Propuesta:** copiar ambos campos desde `pending_approvals` a la fila terminal de `audit_log` antes de borrar el pendiente. Es un cambio acotado, sin migración nueva (las columnas ya existen en `audit_log`).
 
 **Esfuerzo:** bajo. **Riesgo de no hacerlo:** el rastro de auditoría es incompleto exactamente en el caso para el que existe.
+
+**Resuelto en [Jin_Core PR #24](https://github.com/JFrnck/Jin_Core/pull/24)** (2026-08-05), con un diseño distinto al propuesto arriba: copiar `actor`/`externalInputsSummary` a `recordApproval`/`recordRejection` hubiera sobrecargado el campo `actor` existente (ahí significa "quién aprobó" = siempre el owner, no "quién pidió la tool"). El fix real va en `DualConfirmService.createPendingApproval()` — escribe una fila `tool_call`/`pending` permanente en `audit_log` al crear el pending (mismo patrón que ya usan las tools auto/notify), correlacionada por `requestId` con la fila terminal. Cubre los 5 callers reales sin tocar ninguno.
 
 #### 14. La contraseña de `jin login` queda en el historial del shell
 
@@ -325,9 +331,9 @@ Ya documentado como gap conocido en `STATUS.md` (Fase 6.2+6.3): hoy es el `favic
 | # | Recomendación | Repo | Prioridad | Esfuerzo | Estado |
 | --- | --- | --- | --- | --- | --- |
 | 10 | Zip-slip en `files` + `readOnlyRootFilesystem` | Executor | P0 | Bajo | ✅ PR #6 |
-| 11 | 3 notificaciones muertas esperando "Fase 2.4" | Core | P0 | Bajo | Pendiente |
-| 12 | Lock del audit log no persiste a un restart | Core | P0 | Bajo | Pendiente |
-| 13 | `audit_log` pierde actor/inputs externos al resolver | Core | P0 | Bajo | Pendiente |
+| 11 | 3 notificaciones muertas esperando "Fase 2.4" | Core | P0 | Bajo | ✅ PR #24 |
+| 12 | Lock del audit log no persiste a un restart | Core | P0 | Bajo | ✅ PR #24 |
+| 13 | `audit_log` pierde actor/inputs externos al resolver | Core | P0 | Bajo | ✅ PR #24 |
 | 14 | Contraseña de `jin login` en argv | CLI | P0 | Muy bajo | Handoff (Antigravity) |
 | 15 | Redis y `memory.db` sin verificación de restore | Infra | P0 | Bajo | Handoff (Antigravity) |
 | 16 | WS sin manejo de `disconnect` (UI colgada) | Web + CLI | P1 | Bajo | Pendiente (mitad Web es mía) |
