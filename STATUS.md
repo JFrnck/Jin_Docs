@@ -203,6 +203,34 @@ Dependencias: 5.1 → (5.2, 5.3, 5.4) → 5.5 (tras 5.2) → 6.1 → (6.2+6.3 en
 
 **Nota de numeración:** el número es una etiqueta, no un orden de ejecución — 8.1 corre antes que 7.2 a propósito (ver auditoría). Ya hay precedente en este roadmap: la Fase 3.1 se ejecutó antes que la 2.4.
 
+## Fase 0.1 — debug #1 (2026-08-05, en curso)
+
+El owner pidió corregir los 18 puntos de la Ronda 2 de `docs/RECOMENDACIONES.md` (10-26 + 20.b). Numerada "0.1" a propósito — es deuda encontrada, no una fase nueva del producto; no reordena el roadmap de arriba, corre en paralelo. Split por dueño real de cada repo (`docs/WORKFLOW.md` §2):
+
+**[Claude Code] — en ejecución esta sesión:**
+- [ ] 10 + 26 — Jin_Executor: zip-slip en `files` de `startPreviewService` + `readOnlyRootFilesystem` + límites del init container.
+- [ ] 11 + 12 + 13 — Jin_Core (`src/hitl`, `src/audit`): 3 notificaciones muertas → Telegram real, lock de audit chain persistido, `audit_log` conserva actor/inputs externos al resolver.
+- [ ] 16 (mitad Web) + 17 — Jin_Web: manejo de `disconnect` del WS, mutaciones de `ApprovalCard`/`preview`/`budget`/`editor` sin `catch`.
+- [ ] 18 — Jin_Core: bump `js-yaml` (advisory alto, dependencia de producción).
+- [ ] 19 — Jin_Web: `monaco-editor`→`dompurify` vulnerable, evaluar upgrade.
+- [ ] 3 + 4 + 5 (Ronda 1, seguían sin tocar) — Jin_Core: `.env` en scripts standalone, colisión Redis e2e, heap de Node en tooling.
+
+**[Antigravity] — handoff, no se toca desde esta sesión sin negociación previa (`Jin_CLI/CLAUDE.md`):**
+- [ ] 20.b — regenerar `Jin_CLI/source/api-types.ts` (desincronizado desde el PR #21 de Core) + mostrar `actor`/`externalInputsSummary` en `TasksView`.
+- [ ] 14 — `jin login` deja de tomar la contraseña como argumento posicional (prompt enmascarado).
+- [ ] 16 (mitad CLI) — manejo de `disconnect` del WS + reconexión en `ws-chat.ts`.
+- [ ] 20 (mitad CLI) — sacar `|| true` de `pnpm run test`/`generate:api` en el CI de Jin_CLI, agregar `lint`.
+- [ ] 15 — Jin_Infra: `verify-restore.sh` extendido a Redis y `memory.db`, no solo Postgres.
+- [ ] 25 — Jin_Infra: pinnear checksum/firma de los instaladores de K3s/Flux en bootstrap.
+
+**[Claude Code, cuando exista quien lo priorice] — deuda de fondo, no bloqueante:**
+- [ ] 21 — specs faltantes en `chain-verification.service.ts`, `ws-token.ts`, gateways WS, `env.schema.ts`.
+- [ ] 22 — Jin_Web sin ningún test unitario (más allá del gap de e2e ya conocido).
+- [ ] 23 — Jin_CLI, cobertura mínima.
+- [ ] 24 — Jin_Infra: cablear `readinessProbe`/`livenessProbe` a `/health/ready`/`/health/live` cuando exista el Deployment real (Fase 7.1).
+
+Se irá tachando y anotando PR por punto a medida que se cierre.
+
 ## Bloqueados / esperando
 
 - Ejecución real del bootstrap en la VM OCI la hace el owner (Claude Code solo escribe manifests/scripts).
