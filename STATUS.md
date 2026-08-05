@@ -185,12 +185,22 @@ Los `"name": "temp-*"` de `package.json` en Web y CLI ya no aplican como pendien
 16. **Fase 6.1** [Claude Code] — ✅ hecho, [PR #17](https://github.com/JFrnck/Jin_Core/pull/17) Jin_Core (Auth JWT single-user + API REST/WebSocket). ADR 0007. Ver sección dedicada arriba.
 17. **Fase 6.2** [Claude Code] — ✅ hecho, [PR #3](https://github.com/JFrnck/Jin_Web/pull/3) Jin_Web (Web Dashboard completo, no MVP). Reasignado de Antigravity el 2026-08-02. Ver sección dedicada arriba.
 18. **Fase 6.3** [Claude Code] — ✅ hecho, mismo [PR #3](https://github.com/JFrnck/Jin_Web/pull/3) (Monaco + Zone Widgets + preview apps — construidas junto con 6.2 a pedido del owner, no en dos PRs separados).
-19. **Fase 6.4** [Antigravity] — CLI con Ink (Jin_CLI — hoy es el template sin tocar).
-20. **Fase 7.1** [Antigravity] — Deploy real de las apps + Flux GitOps (Jin_Infra + Dockerfiles).
-21. **Fase 7.2** [Claude Code] — Runbook de activación real (secretos reales, OAuth consent, webhook Telegram, smoke test E2E).
-22. **Fase 7.3** [Claude Code] — Hardening: auditoría de seguridad completa, chaos tests, MCP servers.
+19. **Fase 6.4** [Antigravity] — ✅ hecho, [PR #3](https://github.com/JFrnck/Jin_CLI/pull/3) Jin_CLI (CLI con Ink: login/status/tasks/approve/reject/chat/memory). Revisada por Claude Code en 3 rondas antes de implementar (ver sección dedicada abajo) + [PR #4](https://github.com/JFrnck/Jin_CLI/pull/4) (fix de falso positivo de GitGuardian).
+20. **Fase 7.1** [Antigravity] — Deploy real de las apps + Flux GitOps (Jin_Infra + Dockerfiles). **Siguiente en la cola.**
+21. **Fase 8.1** [Claude Code] — Infisical SDK en runtime (Core + Executor). **Va antes de 7.2** — ver auditoría abajo.
+22. **Fase 7.2** [Claude Code] — Runbook de activación real (secretos reales, OAuth consent, webhook Telegram, smoke test E2E).
+23. **Fase 8.2** [Claude Code] — Golden set de prompt injection (~50 adversariales, BLUEPRINT §13.1 obligatorio). **Va antes de 7.3.**
+24. **Fase 7.3** [Claude Code] — Hardening: auditoría de seguridad completa, chaos tests, MCP servers.
+25. **Fase 9.1** [Antigravity] — Notion + comando `/audio` (transcripción).
+26. **Fase 9.2** [Claude Code] — GitHub App + capacidad git real (desbloquea `mergeAgentBranch`, hoy 501).
+27. **Fase 9.3** [Claude Code] — RAG de corpus propio en pgvector (correos/PDFs/notas — la otra mitad de BLUEPRINT §3.3.1).
+28. **Fase 9.4** [Antigravity] — Alerta matutina 06:00 con resumen de prioridades.
+29. **Fase 9.5** [Claude Code] — Feature flags en caliente (ConfigMap + SIGHUP).
+30. **Fase 9.6** [Antigravity] — Comandos de administración en la CLI + menús navegables.
 
-Dependencias: 5.1 → (5.2, 5.3, 5.4) → 5.5 (tras 5.2) → 6.1 → (6.2+6.3 en secuencia [Claude Code], 6.4 [Antigravity] en paralelo) → 7.1 → 7.2 → 7.3. **Fases 5.1-5.5 y 6.1 hechas — siguiente: Claude Code planifica Fase 6.2 (Jin_Web), Antigravity puede avanzar 6.4 (Jin_CLI) en paralelo sin dependencia entre ambas.**
+Dependencias: 5.1 → (5.2, 5.3, 5.4) → 5.5 (tras 5.2) → 6.1 → (6.2+6.3 en secuencia [Claude Code], 6.4 [Antigravity] en paralelo) → **7.1 → 8.1 → 7.2 → 8.2 → 7.3 → Fase 9 (cualquier orden, ninguna bloquea a otra)**. **Fases 1-6 completas. Siguiente: Antigravity ejecuta 7.1 (deploy real); Claude Code queda a la espera de que exista despliegue para 8.1/7.2, o puede adelantar cualquier fase 9 en paralelo si el owner lo prefiere.**
+
+**Nota de numeración:** el número es una etiqueta, no un orden de ejecución — 8.1 corre antes que 7.2 a propósito (ver auditoría). Ya hay precedente en este roadmap: la Fase 3.1 se ejecutó antes que la 2.4.
 
 ## Bloqueados / esperando
 
@@ -251,6 +261,32 @@ El owner pidió explícitamente web **completa, no un MVP recortado** — las 10
 - No existe una tool/endpoint de "comentar código línea por línea" para el editor — se pidieron comentarios vía `/api/chat` con un formato de línea numerada parseado client-side (regex), documentado en el código como puente, no como feature con contrato propio.
 - Íconos PWA son el favicon placeholder del template (`favicon.svg`), no el ícono 512px maskable que pide el diseño §09 — necesita un asset real, no generable en esta sesión.
 - El widget "sesión actual" del panel de presupuesto (v1/v2 del diseño) no tiene equivalente backend limpio — ya resuelto en v3 reemplazándolo por "última hora", que sí usa datos reales de la Fase 6.1.1.
+
+## Auditoría de cobertura: BLUEPRINT vs. roadmap (2026-08-05)
+
+El owner preguntó si las fases pendientes cubrían todas las funciones que Jin debería tener. Se auditó `BLUEPRINT.md` completo (§1-15) contra el código real de los 6 repos y contra el roadmap de `STATUS.md`/`PROMPTS.md`. **Resultado: 11 funciones especificadas en el blueprint que ninguna fase 1-7 cubría.** Cada una verificada contra el código, no contra el texto de otro documento:
+
+| Función | BLUEPRINT § | Estado real verificado | Resolución |
+| --- | --- | --- | --- |
+| Notion (integración completa) | §1.1, §7.4, §8.2, §9.1 | Cero código. Es un objetivo declarado del proyecto. | **Fase 9.1** |
+| Comando `/audio` (transcribe → Notion) | §8.2 | No está entre los 10 comandos reales del bot | **Fase 9.1** |
+| GitHub App + tools git | §7.3, §9.1 | Cero código en Core y Executor. `mergeAgentBranch` lanza 501 con el comentario "no existe hoy ninguna tool que le dé a un sub-agente la capacidad de producir una branch real" | **Fase 9.2** |
+| RAG de corpus propio (pgvector) | §3.3, §3.3.1, §6.4 | Solo existe la mitad `sqlite-vec` (memoria, Fase 4.3). pgvector está en la imagen pero ningún módulo lo usa. | **Fase 9.3** |
+| Alerta matutina 06:00 | §7.1 | El cron 00:00 (Shadowing) sí existe; el de 06:00 no, ni nada que arme "resumen de prioridades" | **Fase 9.4** |
+| Infisical SDK en runtime | §11 | Manifest desplegado (Fase 1.1) pero **cero SDK en el código**: hoy todo es env plano, exactamente lo que §11 prohíbe | **Fase 8.1** (antes de 7.2) |
+| Golden set prompt injection (~50) | §13.1 **obligatorio** | Cero. `injection-sanitizer.spec.ts` cubre la unidad, no un corpus adversarial | **Fase 8.2** (antes de 7.3) |
+| Feature flags (ConfigMap + SIGHUP) | §12.3 | Cero código, cero ConfigMap | **Fase 9.5** |
+| CLI: admin tasks + menús navegables | §8.3 | Fase 6.4 construyó 7 comandos de operación, ninguno de admin, sin menús de flecha | **Fase 9.6** |
+| OpenTelemetry / tracing | §10.3 | Cero. Diferido en Fase 1 ("hasta que duela"), nunca retomado | **Diferido, con criterio explícito** (abajo) |
+| PgBouncer | §3.3 | Cero. Diferido 2026-07-19 junto con Tempo | **Diferido, con criterio explícito** (abajo) |
+
+**Ordenamiento no obvio, decidido en la auditoría:** `8.1` (Infisical SDK) va **antes** de `7.2` porque 7.2 escribe el runbook de "carga de secretos reales en Infisical" — si se escribe mientras el runtime lee env plano, documenta el mecanismo equivocado. `8.2` (golden set) va **antes** de `7.3` para que la auditoría de seguridad de 7.3 corra contra una base ya cubierta, en vez de descubrir agujeros que un test permanente ya debería estar vigilando.
+
+**Diferidos con criterio de reactivación explícito** (para no repetir el patrón de "pospuesto y olvidado" que produjo esta auditoría):
+- **OpenTelemetry/Tempo (§10.3):** entra cuando aparezca el primer bug de latencia o de causalidad entre servicios que los logs de Loki no alcancen a explicar. Antes de eso es instrumentación sin pregunta que responder.
+- **PgBouncer (§3.3):** entra cuando Postgres muestre presión real de conexiones. Con 1 réplica de core y un solo usuario, hoy no hay caso.
+
+**No son gaps** (desviaciones ya decididas y documentadas): BullMQ descartado (el diagrama de arquitectura de §2 quedó desactualizado, es solo el diagrama), Alertmanager reemplazado por Telegram directo (Fase 4.1), MCP servers y chaos tests ya cubiertos por 7.3, manifests de deploy ya cubiertos por 7.1.
 
 ## HITL: actor + inputs externos en pendingApprovals (Jin_Core PR #21 + Jin_Web PR #4, 2026-08-04)
 

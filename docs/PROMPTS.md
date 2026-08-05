@@ -811,6 +811,235 @@ ANTES DE IMPLEMENTAR: Propón el plan. Espera aprobación.
 
 ---
 
+## Fase 8 — Prerequisitos de producción (auditoría de cobertura 2026-08-05)
+
+> Estas dos fases salieron de auditar `BLUEPRINT.md` completo contra el código real: son funciones **especificadas en el blueprint y nunca construidas** que condicionan las Fases 7.2/7.3. **Orden de ejecución real: 7.1 → 8.1 → 7.2 → 8.2 → 7.3.** El número es una etiqueta, no un orden (ya hay precedente: 3.1 se ejecutó antes que 2.4).
+
+### 8.1 [CLAUDE CODE] — Infisical SDK en runtime (repos: Jin_Core + Jin_Executor)
+
+```
+BLUEPRINT §11 dice literal: "core y Executor los cargan al startup vía SDK; nunca están en env plain". Hoy es exactamente al revés: todo pasa por `src/config/env.schema.ts` como env vars planas, y el SDK de Infisical no está importado en ningún lado (verificado: cero ocurrencias en `src/`). El manifest de Infisical SÍ existe y se despliega (Jin_Infra `k8s/base/infisical`, Fase 1.1) — lo que falta es que las apps lo consuman.
+
+VA ANTES DE 7.2 A PROPÓSITO: la Fase 7.2 escribe el runbook de "carga de secretos reales en Infisical". Si ese runbook se escribe mientras el runtime sigue leyendo env plano, documenta el mecanismo equivocado y hay que reescribirlo entero.
+
+ANTES DE ESCRIBIR CÓDIGO:
+1. Lee `../Jin_Docs/docs/BLUEPRINT.md` §11 completa y `../Jin_Docs/AGENTS.md` §5.2.
+2. Lee `Jin_Core/src/config/env.schema.ts` — es hoy la única fuente de verdad de las 16 variables requeridas, todas fail-fast. Ese contrato de "faltar una variable = no arranca" NO se negocia; lo que cambia es de dónde salen los valores.
+3. Revisa `Jin_Infra/k8s/base/infisical/` y `Jin_Infra/scripts/bootstrap/02-seed-secrets.sh` (ya existe, ver qué asume).
+
+TU TAREA:
+- Cargar secretos desde Infisical al startup, ANTES de que corra `validateEnv()`, manteniendo el fail-fast intacto (si Infisical no responde o falta una clave, el proceso muere ruidoso — jamás arranca a medias).
+- **Env plano sigue siendo el camino de desarrollo local**: el `.env` + `docker-compose.dev.yaml` no se rompen. Criterio explícito de cuándo usa cada uno (ej. `INFISICAL_ENABLED` o `NODE_ENV=production`), documentado en `.env.example`.
+- Mismo tratamiento en `Jin_Executor` (tiene su propio `env.schema`).
+- Tests: arranque con Infisical mockeado devolviendo el set completo, y arranque fallando ruidoso cuando falta una clave o el servicio no responde.
+
+CRITERIOS DE ÉXITO:
+- Ningún secreto real necesita estar en un env var del Deployment para que core/executor arranquen en producción.
+- `pnpm dev` local sigue funcionando con `.env` sin Infisical corriendo.
+- CI verde en real (`gh pr checks`). Actualiza `../Jin_Docs/STATUS.md`.
+
+RESTRICCIONES:
+- No debilites `env.schema.ts`: nada de volver opcional una variable "porque ahora viene de Infisical".
+- El token/credencial de Infisical es el único secreto que sí vive fuera de Infisical (problema de bootstrap) — documentá dónde vive y por qué.
+
+USA CLAUDE OPUS 4.8 (gestión de secretos = frontera de seguridad).
+
+ANTES DE IMPLEMENTAR: Propón el plan. Espera aprobación.
+```
+
+### 8.2 [CLAUDE CODE] — Golden set de prompt injection (repo: Jin_Core)
+
+```
+BLUEPRINT §13.1 lista como **OBLIGATORIO**: "Prompt injection golden set: corpus de ~50 prompts adversariales conocidos; el sistema debe manejarlos correctamente". Verificado: no existe (cero archivos golden/adversarial en el repo). Hoy `injection-sanitizer.spec.ts` cubre el escapado de delimitador y el nonce, que es la unidad — no el sistema end-to-end contra un corpus real.
+
+RELACIÓN CON 7.3: la Fase 7.3 incluye "intentos activos de prompt injection contra el agent loop" como parte de la auditoría. Eso es un ejercicio puntual; esto es la **suite de regresión permanente** que evita que un refactor futuro reabra un agujero ya cerrado. Hacé esta primero para que 7.3 audite contra una base ya cubierta.
+
+ANTES DE ESCRIBIR CÓDIGO:
+1. Lee `../Jin_Docs/AGENTS.md` §5.1 completa y `../Jin_Docs/docs/adr/` (ADR 0004, el porqué del nonce por sesión).
+2. Lee `src/security/injection-sanitizer.ts` (incluida `summarizeUntrustedSources`, agregada 2026-08-04) y `src/agent/agent.service.ts` (dónde se envuelve el resultado de cada tool).
+
+TU TAREA:
+- Corpus de ~50 payloads adversariales versionado en el repo (`src/security/golden-set/`), cada uno con su categoría y su expectativa. Cubrí al menos: cierre de delimitador falso, tags con nonce inventado o ausente, instrucciones en otro idioma, payload en base64/rot13, "ignora tus instrucciones previas", intento de escalar el hitlLevel de una tool, intento de que el agente invente que una aprobación ya ocurrió, y contenido que imita el formato de un tool_result del sistema.
+- Los tests corren contra el pipeline REAL (sanitizer + system prompt + clasificador HITL), con el LLM mockeado — lo que se verifica es que el contenido hostil llega neutralizado y que ninguna tool sube de nivel, no que el modelo "se porte bien".
+- Documentá en el propio corpus qué ataque representa cada entrada: un golden set sin explicación es imposible de mantener.
+
+CRITERIOS DE ÉXITO:
+- Los ~50 casos pasan, y al menos 3 de ellos fallan de verdad si comentás el escapado de `wrapUntrustedContent` (probalo y dejalo escrito — un test que no puede fallar no prueba nada).
+- CI verde en real. Actualiza `../Jin_Docs/STATUS.md`.
+
+RESTRICCIONES:
+- Ningún payload del corpus puede ejecutarse contra APIs reales (Gmail/Canvas/Modal) — todo mockeado.
+
+USA CLAUDE OPUS 4.8 (auditoría de seguridad).
+
+ANTES DE IMPLEMENTAR: Propón el plan. Espera aprobación.
+```
+
+---
+
+## Fase 9 — Funciones del blueprint nunca agendadas (post-producción)
+
+> Mismo origen (auditoría de cobertura 2026-08-05): están en `BLUEPRINT.md` con spec propia pero ninguna fase 1-7 las cubría. Ninguna bloquea el despliegue — van después de 7.3, en el orden que el owner prefiera.
+
+### 9.1 [ANTIGRAVITY] — Notion + comando `/audio` (repo: Jin_Core)
+
+```
+Notion es un objetivo declarado del proyecto (BLUEPRINT §1.1: "productividad: Gmail, Calendar, Notion"), tiene spec propia (§7.4), aparece como destino del comando `/audio` del bot (§8.2) y como ejemplo de HITL `notify` (§9.1). Verificado: cero código de Notion en el repo, y `/audio` no está entre los comandos implementados del bot.
+
+ANTES DE ESCRIBIR CÓDIGO:
+1. Lee `../Jin_Docs/docs/BLUEPRINT.md` §7.4, §8.2, §9.1 y `AGENTS.md` §5.1.
+2. Copiá el patrón ya establecido por tus integraciones anteriores: `src/integrations/google/` y `src/integrations/canvas/` (cliente REST + tools registradas en `src/tools/registry.ts` + `toolExecutorRegistry.register()` en el `onModuleInit()` del módulo).
+
+TU TAREA:
+- `src/integrations/notion/`: cliente con integration token internal (scoped a un workspace), vía `env.schema.ts` fail-fast como toda credencial.
+- Tools nuevas en `registry.ts` con su `hitlLevel` explícito. Referencia del blueprint: "añadir tarea a Notion" es `notify` (§9.1) y "comentario en Notion" es reversible a efectos de timeout (§9.4). Usos declarados en §7.4: logs de entrenamiento físico, resúmenes académicos, base de enlaces.
+- Comando `/audio` en el bot: recibe un mensaje de voz de Telegram, lo transcribe y guarda el resultado en Notion. La transcripción necesita un proveedor — proponé cuál en el plan (OpenAI ya está como dependencia por los embeddings de memoria) y justificá el costo contra el budget guard.
+- Todo contenido que vuelva de Notion es input externo: `wrapUntrustedContent` obligatorio antes de que toque el contexto del LLM.
+
+CRITERIOS DE ÉXITO:
+- Un audio enviado por Telegram termina como página/bloque real en Notion, con su entrada en el audit log.
+- Las tools nuevas están en el contrato OpenAPI regenerado y tienen tests de la matriz tool × hitlLevel (BLUEPRINT §13.1).
+- CI verde en real. Actualiza `../Jin_Docs/STATUS.md`.
+
+ANTES DE IMPLEMENTAR: Propón el plan. Espera aprobación.
+```
+
+### 9.2 [CLAUDE CODE] — GitHub App + capacidad git real (repos: Jin_Executor + Jin_Core)
+
+```
+BLUEPRINT §7.3 especifica GitHub App (no PAT) con tokens de instalación efímeros (1 h) generados on-demand por el Executor e inyectados al pod sin persistir. Verificado: cero código de GitHub en ambos repos. La consecuencia real está escrita en el propio código: `mergeAgentBranch` (registry.ts) existe como guardrail pero lanza 501, con el comentario "no existe hoy ninguna tool que le dé a un sub-agente la capacidad de producir una branch real" — y `startPreviewService` recibe los archivos inline (`files`) en vez de clonar una branch, documentado como extensión futura en ADR 0006.
+
+O sea: esta fase cierra el ciclo de "agentes que producen código de verdad", que hoy está cortado.
+
+ANTES DE ESCRIBIR CÓDIGO:
+1. Lee `../Jin_Docs/docs/BLUEPRINT.md` §7.3, §9.1 (ejemplos HITL: `git commit` local = notify, `git push` = confirm, `git push --force` = dual-confirm) y ADR 0005 punto 9 + ADR 0006.
+2. Lee `Jin_Executor/src/` completo — el token va inyectado al pod por el Executor, jamás por core (regla arquitectónica dura de §4.1: core no habla con K8s).
+
+TU TAREA:
+- GitHub App con permisos scoped: generación de installation token efímero en el Executor, on-demand, nunca persistido ni logueado.
+- Tools git en `registry.ts` con los niveles exactos del blueprint §9.1: `git commit` local → `notify`, `git push` → `confirm`, `git push --force` → `dual-confirm`. Ninguna tool git puede ser `auto`.
+- Implementar `mergeAgentBranch` de verdad (quitar el 501) ahora que la capacidad existe.
+- Egress: los pods que hagan git ops necesitan `github.com` en su whitelist — y solo eso.
+
+CRITERIOS DE ÉXITO:
+- Un sub-agente puede producir una branch real y `mergeAgentBranch` la mergea tras aprobación HITL.
+- El token nunca aparece en logs, ni en el audit log, ni persiste tras la vida del pod (test que lo pruebe).
+- CI verde en real. Actualiza `../Jin_Docs/STATUS.md`.
+
+RESTRICCIONES:
+- GitHub App, no PAT (§7.3 es explícito). Sin `git push --force` a `main` bajo ninguna circunstancia, ni siquiera con dual-confirm.
+
+USA CLAUDE OPUS 4.8 (credenciales efímeras + RBAC = frontera de seguridad).
+
+ANTES DE IMPLEMENTAR: Propón el plan. Espera aprobación.
+```
+
+### 9.3 [CLAUDE CODE] — RAG de corpus propio en pgvector (repo: Jin_Core)
+
+```
+BLUEPRINT §3.3.1 traza una frontera explícita que hoy solo está construida a la mitad:
+- "pgvector = corpus. Correos indexados, PDFs de Canvas, notas. Grande, con JOINs relacionales." → NO EXISTE.
+- "sqlite-vec = memoria del agente. Hechos, preferencias, episodios." → construido en Fase 4.3.
+
+Verificado: los embeddings del repo viven solo en `src/memory/` (sqlite-vec, `text-embedding-3-large`). La imagen de Postgres ya trae pgvector (`pgvector/pgvector:0.8.5-pg16`, tanto en producción como en `docker-compose.dev.yaml`) pero ningún módulo la usa. §6.4 lo confirma: "Corpus propio (correos indexados, notas, tareas): embeddings guardados en pgvector".
+
+ANTES DE ESCRIBIR CÓDIGO:
+1. Lee `../Jin_Docs/docs/BLUEPRINT.md` §3.3, §3.3.1 y §6.4 completas.
+2. Lee `src/memory/` entero — reusá `EmbeddingProvider` (ya existe, ya elige modelo y guarda `modelo_embedding` por entrada). NO escribas un segundo proveedor de embeddings.
+3. `AGENTS.md` §5.1 punto 2: todo lo que se indexa pasa por `sanitizeForIndexing()` (ya existe en `injection-sanitizer.ts`, hoy sin consumidor real — este es su caller).
+
+TU TAREA:
+- Schema Drizzle + migración para el corpus con índice HNSW (§3.3; IVFFlat como fallback documentado si la RAM aprieta).
+- Pipeline de indexación de al menos una fuente real de las tres declaradas (correos, PDFs de Canvas, notas) — elegí la de mayor valor y dejá las otras documentadas como extensión, sin stubs vacíos.
+- Búsqueda con JOIN relacional real (ese es el argumento entero de §3.3 para elegir pgvector sobre Qdrant: "un JOIN entre tasks y task_embeddings es SQL nativo").
+- Métrica `rag_hit_ratio` (§10.1 la lista y no existe).
+
+CRITERIOS DE ÉXITO:
+- Una consulta del agente recupera contexto real del corpus, con su JOIN, y el contenido recuperado llega envuelto (`wrapUntrustedContent`) al prompt.
+- Tests de integración con Postgres real (testcontainers, ya configurado).
+- CI verde en real. Actualiza `../Jin_Docs/STATUS.md`.
+
+RESTRICCIONES:
+- No mezcles corpus con memoria: son dos almacenes con dos ciclos de vida distintos, la frontera de §3.3.1 no se negocia.
+
+ANTES DE IMPLEMENTAR: Propón el plan. Espera aprobación.
+```
+
+### 9.4 [ANTIGRAVITY] — Alerta matutina 06:00 (repo: Jin_Core)
+
+```
+BLUEPRINT §7.1, última línea del Shadowing Académico: "Genera bloques de estudio en Google Calendar (con HITL notify). **Alerta matutina 06:00 con resumen de prioridades**". Verificado: el cron nocturno de las 00:00 existe y funciona (`src/integrations/canvas/shadowing.service.ts`, tuyo desde Fase 3.1), pero no hay ningún cron a las 06:00 ni nada que arme un "resumen de prioridades".
+
+Es la mitad que falta del ciclo: hoy el sistema analiza a medianoche y no te dice nada hasta que vos preguntás.
+
+ANTES DE ESCRIBIR CÓDIGO:
+1. Lee `../Jin_Docs/docs/BLUEPRINT.md` §7.1 y §10.4.
+2. Lee tu propio `shadowing.service.ts` — el cron de 00:00 ya deja el análisis hecho; esta fase decide qué se persiste de esa corrida para poder resumirla 6 h después (hoy no se guarda nada reutilizable, verificalo antes de asumir).
+
+TU TAREA:
+- Cron 06:00 local que envía por Telegram el resumen de prioridades del día.
+- Decidí y documentá de dónde salen las prioridades: reusar el resultado de la corrida de las 00:00 (requiere persistirlo) o recalcular. Si recalculás, justificá el costo contra el budget guard — son dos llamadas a LLM por día en vez de una.
+- El resumen es informativo: `auto` en términos de HITL, sin aprobación. Pero pasa por el audit log igual.
+
+CRITERIOS DE ÉXITO:
+- A las 06:00 llega un mensaje de Telegram con las prioridades reales del día, no un placeholder.
+- Si la corrida de las 00:00 falló, el mensaje de las 06:00 lo dice explícitamente en vez de mentir con un resumen vacío.
+- CI verde en real. Actualiza `../Jin_Docs/STATUS.md`.
+
+ANTES DE IMPLEMENTAR: Propón el plan. Espera aprobación.
+```
+
+### 9.5 [CLAUDE CODE] — Feature flags en caliente (repo: Jin_Core + Jin_Infra)
+
+```
+BLUEPRINT §12.3: "ConfigMap `feature-flags.yaml`. Reload en caliente vía SIGHUP en core. Uso: activar/desactivar integraciones, cambiar HITL levels de tools individuales (con dual-confirm), rutear entre modelos". Verificado: cero código de feature flags, cero ConfigMap.
+
+OJO CON LA TENSIÓN DE DISEÑO, resolvela explícitamente en el plan: §9.3 dice "Prohibido: el LLM no puede cambiar el hitlLevel de una tool en runtime" y §12.3 dice que un humano SÍ puede vía flag con dual-confirm. No se contradicen (uno es el LLM, otro es el owner) pero la implementación tiene que hacer imposible el primero mientras habilita el segundo — y "cambiar el HITL level de una tool" ya está declarado como acción `dual-confirm` en la tabla de §9.1.
+
+ANTES DE ESCRIBIR CÓDIGO:
+1. Lee `../Jin_Docs/docs/BLUEPRINT.md` §12.3, §9.1 y §9.3.
+2. Lee `src/tools/registry.ts` — hoy los `hitlLevel` son estáticos y `Object.freeze`-ados a propósito. Ese es el invariante que estás tocando: pensalo dos veces y documentá la decisión.
+
+TU TAREA:
+- ConfigMap + carga en caliente (SIGHUP) sin redeploy.
+- Flags de: activar/desactivar integraciones, override de `hitlLevel` por tool, ruteo entre modelos.
+- Todo cambio de flag que toque un `hitlLevel` queda en el audit log con su aprobación dual-confirm. Un override jamás puede BAJAR un nivel sin dual-confirm; subirlo (más restrictivo) puede ser `confirm`.
+- Tests: el LLM no puede alterar un flag por ninguna vía (ni tool, ni prompt injection — cruzá esto con el golden set de 8.2).
+
+CRITERIOS DE ÉXITO:
+- Cambiar un flag y recargar sin reiniciar el pod, verificado.
+- Test que prueba que bajar un `hitlLevel` sin dual-confirm es imposible.
+- CI verde en real. Actualiza `../Jin_Docs/STATUS.md`.
+
+USA CLAUDE OPUS 4.8 (toca el invariante central del HITL).
+
+ANTES DE IMPLEMENTAR: Propón el plan. Espera aprobación.
+```
+
+### 9.6 [ANTIGRAVITY] — Comandos de administración en la CLI (repo: Jin_CLI)
+
+```
+BLUEPRINT §8.3 declara para la CLI: "Ink + **Inquirer.js para menús navegables con teclas de flecha**" y "casos de uso: desarrollo local, debugging, **admin tasks (rotar tokens, forzar backup, ver logs recientes)**". La Fase 6.4 construyó 7 comandos (login/status/tasks/approve/reject/chat/memory) — todos de operación, ninguno de administración, y sin menús navegables.
+
+ANTES DE ESCRIBIR CÓDIGO:
+1. Lee `../Jin_Docs/docs/BLUEPRINT.md` §8.3.
+2. Lee tu propio `Jin_CLI/source/` de la Fase 6.4 — el cliente tipado y el auth storage ya están, reusalos.
+3. Verificá qué endpoints existen realmente en `Jin_Core/contracts/openapi.json` antes de diseñar un comando: "forzar backup" y "ver logs recientes" pueden no tener endpoint todavía. Si falta, decilo en el plan en vez de inventar la ruta — se coordina con Claude Code en STATUS.md.
+
+TU TAREA:
+- Menús navegables con teclas de flecha donde aporten (la bandeja de aprobaciones es el caso obvio: navegar y aprobar sin copiar UUIDs a mano).
+- Comandos de admin de §8.3, solo los que tengan endpoint real detrás.
+- Cero tipos copiados a mano (regla de oro #11).
+
+CRITERIOS DE ÉXITO:
+- Aprobar una acción HITL navegando con flechas, sin pegar un requestId.
+- CI verde en real. Actualiza `../Jin_Docs/STATUS.md`.
+
+ANTES DE IMPLEMENTAR: Propón el plan. Espera aprobación.
+```
+
+---
+
 ## Plantilla genérica
 
 Cuando abras una nueva sesión no cubierta arriba, usa esta plantilla:

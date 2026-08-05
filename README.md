@@ -19,6 +19,7 @@ Jin/                          # tu carpeta local (no es repo)
 │       ├── WORKFLOW.md          # coordinación entre IDEs
 │       ├── MODEL_ROUTING.md     # qué modelo usar cuándo
 │       ├── PROMPTS.md           # prompts por fase
+│       ├── RECOMENDACIONES.md   # propuestas de criterio propio, pendientes de aprobar
 │       ├── adr/                 # créalo vacío
 │       └── runbooks/            # créalo vacío
 ├── Jin_Core/                 # + stubs AGENTS.md y CLAUDE.md (ver STUBS.md)
