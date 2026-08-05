@@ -117,7 +117,7 @@ Ya documentado como gap conocido en `STATUS.md` (Fase 6.2+6.3): hoy es el `favic
 
 ### P0 — Seguridad e integridad, antes del deploy real
 
-#### 10. ✅ RESUELTO — Zip-slip en `startPreviewService`: un `files` malicioso escribe fuera de `/workspace`
+#### 10. ✅ RESUELTO (parcial, ver nota) — Zip-slip en `startPreviewService`: un `files` malicioso escribe fuera de `/workspace`
 
 **Verificado:** `Jin_Executor/src/preview-service/preview-service-request.schema.ts:9` valida `files: z.record(z.string().min(1), z.string())` — la clave es el path de destino y **no se restringe su contenido**. `tar-payload.ts:71-85` escribe esa clave tal cual en el header USTAR sin sanear `../` ni rutas absolutas, y el init container la extrae con `tar xz -C /workspace` (`service-pod-spec.builder.ts:88`). Una clave `"../../app/evil.js"` escapa del directorio de trabajo.
 
@@ -129,7 +129,7 @@ Ya documentado como gap conocido en `STATUS.md` (Fase 6.2+6.3): hoy es el `favic
 
 **Esfuerzo:** bajo. **Riesgo de no hacerlo:** el único camino del sistema donde un LLM controla nombres de archivo escritos a disco no tiene barrera.
 
-**Resuelto en [Jin_Executor PR #6](https://github.com/JFrnck/Jin_Executor/pull/6)** (2026-08-05): `isSafeRelativePath()` en dos capas (`tar-payload.ts` + Zod en el borde HTTP), `readOnlyRootFilesystem: true` en el container `app` + `emptyDir` en `/tmp`. Verificado contra el único test de integración con K3s vivo (app real usa `require("http")` puro, sin escritura a disco) antes de asumir que el endurecimiento no rompía nada. **Hallazgo lateral corregido de paso:** `Jin_Executor/contracts/openapi.json` estaba desactualizado desde el PR #5 (Fase 5.5) — faltaban los 3 endpoints `/services*` por completo. Sin impacto en consumidores (el `executor-client` de Jin_Core está escrito a mano, no generado desde ese contrato) — era deuda de documentación pura.
+**Resuelto en [Jin_Executor PR #6](https://github.com/JFrnck/Jin_Executor/pull/6)** (2026-08-05): `isSafeRelativePath()` en dos capas (`tar-payload.ts` + Zod en el borde HTTP) — esto es lo que cierra el zip-slip en sí, y está confirmado por CI real con K3s vivo. **`readOnlyRootFilesystem: true` en el container `app` se intentó como defensa en profundidad adicional y se revirtió en el mismo PR:** el CI real (no una sospecha) mostró el smoke test "camino feliz" colgado 180s, con cuatro minutos de silencio total en el log — ni siquiera el timeout propio de `waitUntilPodRunning` (60s) llegó a dispararse, lo que apunta a algo más temprano que el pod nunca sirviendo HTTP, distinto de la flakiness de red ya documentada en ADR 0003 (esa es rápida, con reintentos que sí loguean). Sin acceso a un clúster K3s real para diagnosticar la causa exacta, no se forzó el cambio sin poder verificarlo — queda documentado en el código como intentado y revertido, no descartado en silencio, pendiente de retomar con logging más granular en el test o acceso a un clúster real. **La corrección primaria (el zip-slip) no depende de esto** y queda cerrada. **Hallazgo lateral corregido de paso:** `Jin_Executor/contracts/openapi.json` estaba desactualizado desde el PR #5 (Fase 5.5) — faltaban los 3 endpoints `/services*` por completo. Sin impacto en consumidores (el `executor-client` de Jin_Core está escrito a mano, no generado desde ese contrato) — era deuda de documentación pura.
 
 #### 11. Tres notificaciones críticas quedaron esperando una fase que ya se completó
 
@@ -290,6 +290,16 @@ Ya documentado como gap conocido en `STATUS.md` (Fase 6.2+6.3): hoy es el `favic
 
 **Propuesta:** ya regenerado en el PR #6. Vale la pena que el CI de `Jin_Executor` corra `generate:contract` y falle si hay diff sin commitear (mismo problema de fondo que el punto 20: nada impide que un contrato se desincronice en silencio).
 
+#### 28. (nuevo, abierto) `readOnlyRootFilesystem` en el container `app` de preview-service — intentado y revertido, sigue pendiente
+
+**Contexto:** al cerrar el punto 10, se intentó `readOnlyRootFilesystem: true` en el container `app` como defensa en profundidad (el zip-slip ya cerrado en la capa de datos deja de importar tanto si además no hay dónde escribir). El CI real de `Jin_Executor` (K3s vía testcontainers) mostró el smoke test "camino feliz" de `preview-service.service.integration.spec.ts` colgado el timeout completo de 180s, con **cuatro minutos de silencio total** en el log — ni siquiera el timeout propio de `waitUntilPodRunning` (60s, con su propio mensaje de error) llegó a dispararse antes de que vitest matara el test. Eso no calza con la flakiness de red ya documentada en ADR 0003 (propagación de CoreDNS, del orden de segundos, con reintentos que sí loguean) — apunta a algo más temprano, posiblemente el container `app` sin poder arrancar de verdad pese a que `pod.status.phase` reporte `Running` (Kubernetes no baja la fase a un pod que ya arrancó aunque el container entre en crash loop).
+
+**Por qué se revirtió en vez de forzarlo:** sin acceso a un clúster K3s real para correr `kubectl describe pod`/`kubectl logs` durante el cuelgue, no hay forma de confirmar la causa exacta contra este entorno de desarrollo (Docker apagado, sin cluster local). Forzar un cambio de comportamiento de runtime sin poder verificarlo — en el repo de mayor superficie de seguridad del proyecto — no es un riesgo que valga la pena correr solo por cerrar el punto por completo.
+
+**Propuesta para retomarlo:** (a) agregar logging intermedio al propio test (`waitUntilPodRunning` no loguea nada mientras espera, solo al fallar — un log cada 10-15s con la fase actual del pod haría el próximo intento diagnosticable desde el log de CI sin acceso al clúster); (b) o retomarlo con acceso real a un clúster (local con K3s/Docker levantado, o pidiéndole al owner correr el smoke test a mano) para inspeccionar el pod mientras cuelga.
+
+**No bloquea nada:** el zip-slip (la parte crítica del punto 10) está cerrado sin depender de esto.
+
 ---
 
 ## Resumen para decidir
@@ -331,6 +341,7 @@ Ya documentado como gap conocido en `STATUS.md` (Fase 6.2+6.3): hoy es el `favic
 | 25 | `curl \| sh` sin checksum | Infra | P3 | Bajo | Handoff (Antigravity) |
 | 26 | Init container sin `resources` | Executor | P3 | Muy bajo | ✅ PR #6 |
 | 27 | Contrato OpenAPI de Executor desactualizado desde Fase 5.5 | Executor | P3 | Muy bajo | ✅ PR #6 |
+| 28 | `readOnlyRootFilesystem` en preview-service — intentado, revertido por cuelgue en CI real | Executor | P1 | Medio (necesita clúster real) | Abierto |
 
 **Mi recomendación de secuencia:**
 
