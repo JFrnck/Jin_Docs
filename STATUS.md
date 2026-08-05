@@ -9,7 +9,8 @@
 ### Claude Code
 
 - **Repo:** `Jin_Core`. **Recomendación #1** (readiness/liveness probes) implementada — [PR #22](https://github.com/JFrnck/Jin_Core/pull/22). **Recomendación #2** (poda + compresión del historial de chat) implementada — [PR #23](https://github.com/JFrnck/Jin_Core/pull/23), ver sección dedicada abajo.
-- **Próximo:** sin tarea propia asignada — ambas recomendaciones P0 de `docs/RECOMENDACIONES.md` cerradas. PRs #22 y #23 esperando revisión/merge del owner. Fase 7.1 (deploy real) sigue siendo de Antigravity; handoff pendiente hacia `Jin_CLI` para que adopte `compactedHistory` (ver sección de PR #23).
+- **Próximo:** sin tarea propia asignada. Ambos P0 de la Ronda 1 de `docs/RECOMENDACIONES.md` cerrados; PRs #22 y #23 esperando revisión/merge del owner. **Nueva: Ronda 2 de recomendaciones** (auditoría cross-repo de los 6 repos, 2026-08-05) — 18 puntos nuevos sin implementar, ver abajo y el documento completo. Fase 7.1 (deploy real) sigue siendo de Antigravity.
+- **Handoffs abiertos hacia Antigravity (`Jin_CLI`):** (a) adoptar `compactedHistory` o el PR #23 queda sin consumidor real; (b) **regenerar `source/api-types.ts`** — está desincronizado desde el PR #21 y por eso `jin tasks` no muestra `actor`/`externalInputsSummary`, ver Recomendación 20.b.
 
 ### Antigravity
 
@@ -287,6 +288,19 @@ El owner preguntó si las fases pendientes cubrían todas las funciones que Jin 
 - **PgBouncer (§3.3):** entra cuando Postgres muestre presión real de conexiones. Con 1 réplica de core y un solo usuario, hoy no hay caso.
 
 **No son gaps** (desviaciones ya decididas y documentadas): BullMQ descartado (el diagrama de arquitectura de §2 quedó desactualizado, es solo el diagrama), Alertmanager reemplazado por Telegram directo (Fase 4.1), MCP servers y chaos tests ya cubiertos por 7.3, manifests de deploy ya cubiertos por 7.1.
+
+## Ronda 2 de recomendaciones — auditoría cross-repo (2026-08-05)
+
+El owner pidió revisar el proyecto entero buscando qué más falta que no estuviera documentado, tras cerrar los dos P0 de la Ronda 1. Se auditaron los 6 repos. **Resultado: 18 puntos nuevos (10-26 + 20.b)**, todos verificados contra el código con archivo:línea — el detalle completo está en `docs/RECOMENDACIONES.md`. Los que más importan:
+
+- **P0 seguridad/integridad:** zip-slip en las claves de `files` de `startPreviewService` (+ esos pods sin `readOnlyRootFilesystem`); **tres notificaciones críticas que quedaron esperando "Fase 2.4"** — una fase cerrada hace semanas — así que el escalado de HITL a 12h, el abandono a 24h y la detección de audit chain corrupta solo escriben un log que nadie mira, pese a que el canal de Telegram proactivo ya funciona (lo usan las alertas de presupuesto); el lock del audit log por corrupción es en memoria y un redeploy lo resetea (gap que el propio repo ya reconocía **solo en comentarios de código**, nunca documentado hasta ahora); `audit_log` pierde `actor`/`external_inputs_summary` al resolver la aprobación; la contraseña de `jin login` viaja como argumento de shell; y solo 1 de los 3 tipos de backup se verifica restaurable.
+- **P0 encontrado al final, con consecuencia ya materializada:** `Jin_CLI/source/api-types.ts` está desincronizado desde el PR #21 — le faltan `actor`/`externalInputsSummary`, y `TasksView` no los muestra. **Quien aprueba desde la terminal ve menos información que quien aprueba desde el dashboard.** Nadie se enteró porque el CI de `Jin_CLI` corre `pnpm run test || true` y `generate:api || true`.
+- **P1:** ningún cliente maneja `disconnect` del WebSocket (la UI queda colgada en "pensando" para siempre); las mutaciones de `ApprovalCard` no tienen `catch`, así que una aprobación fallida se ve igual que una exitosa; `js-yaml` de producción con advisory alto en Core; `monaco-editor`→`dompurify` vulnerable en Web.
+- **P2:** `Jin_Web` no tiene un solo test de ningún tipo; en `Jin_Core` faltan specs en piezas de seguridad (`chain-verification.service.ts`, `ws-token.ts`, los dos gateways WS, `env.schema.ts`).
+
+**Corrección de un dato reportado antes:** `Jin_Infra` **sí** tiene CI, y es de los más completos (`kustomize build` + `kube-linter` + `shellcheck` + tests `bats`). El repo sin CI es `Jin_Docs`.
+
+**Verificaciones que dieron limpio** (para no re-auditar): el secret del webhook de Telegram ya es requerido con validación estricta (el feedback de la Ronda 3 a Antigravity quedó bien resuelto); `Jin_Web` maneja el JWT correctamente (cookie `__Host-`, nunca en `localStorage` ni en logs); no hay secretos en texto plano en los manifests de `Jin_Infra` y todos los workloads declaran `resources.limits`; los tipos generados de `Jin_Web` están en sincronía con el contrato; y no hay `TODO`/`any` sin justificar en el código de negocio de Core ni Executor.
 
 ## Recomendación #1 — readiness/liveness probes reales (Jin_Core PR #22, 2026-08-04)
 
