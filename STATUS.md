@@ -330,7 +330,7 @@ Zip-slip en `startPreviewService`: la clave de `files` se escribía sin sanear e
 
 **Hallazgo lateral, corregido de paso (punto 27 nuevo):** `contracts/openapi.json` de este repo estaba desactualizado desde el PR #5 (Fase 5.5) — faltaban los 3 endpoints `/services*` por completo. Regenerado. Sin impacto en consumidores reales (`Jin_Core/src/executor-client/` está escrito a mano, no generado desde este contrato).
 
-**Verificación local post-revert:** 86 unit (14 archivos) + 5 e2e, `tsc --noEmit`/`lint`/`build` limpios, contrato regenerado (sin diff). `test:integration` (K3s real, el que expuso el punto 28) corriendo de nuevo en el CI del PR tras el revert — pendiente de confirmar verde antes de considerar el PR #6 listo para revisión.
+**Verificación (post-revert, CI verde confirmado):** 86 unit (14 archivos) + 5 e2e + `test:integration` (K3s real) en verde — CI 2m31s. **Confirma la hipótesis del punto 28, no solo la sospecha:** el mismo test "camino feliz" que colgó los 180s completos con `readOnlyRootFilesystem: true` pasó en 16s apenas se sacó ese cambio — evidencia directa (antes/después, mismo test, mismo commit salvo esa línea) de que `readOnlyRootFilesystem` era la causa real, no ruido de CI. `tsc --noEmit`/`lint`/`build` limpios, contrato regenerado (sin diff). PR #6 listo para revisión del owner.
 
 ## Ronda 2 de recomendaciones — auditoría cross-repo (2026-08-05)
 

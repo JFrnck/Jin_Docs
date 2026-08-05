@@ -296,6 +296,8 @@ Ya documentado como gap conocido en `STATUS.md` (Fase 6.2+6.3): hoy es el `favic
 
 **Por qué se revirtió en vez de forzarlo:** sin acceso a un clúster K3s real para correr `kubectl describe pod`/`kubectl logs` durante el cuelgue, no hay forma de confirmar la causa exacta contra este entorno de desarrollo (Docker apagado, sin cluster local). Forzar un cambio de comportamiento de runtime sin poder verificarlo — en el repo de mayor superficie de seguridad del proyecto — no es un riesgo que valga la pena correr solo por cerrar el punto por completo.
 
+**Confirmado, no solo sospechado:** el CI del PR corrió de nuevo tras sacar `readOnlyRootFilesystem` (mismo commit salvo esa línea) — el mismo test "camino feliz" que había colgado los 180s completos pasó en 16s. Es evidencia directa antes/después, no una atribución por descarte: la causa era efectivamente `readOnlyRootFilesystem`, no una flakiness genérica de CI.
+
 **Propuesta para retomarlo:** (a) agregar logging intermedio al propio test (`waitUntilPodRunning` no loguea nada mientras espera, solo al fallar — un log cada 10-15s con la fase actual del pod haría el próximo intento diagnosticable desde el log de CI sin acceso al clúster); (b) o retomarlo con acceso real a un clúster (local con K3s/Docker levantado, o pidiéndole al owner correr el smoke test a mano) para inspeccionar el pod mientras cuelga.
 
 **No bloquea nada:** el zip-slip (la parte crítica del punto 10) está cerrado sin depender de esto.
