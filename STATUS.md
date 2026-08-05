@@ -13,19 +13,15 @@
 
 ### Antigravity
 
-- **Repo:** ninguno activo ahora mismo.
-- **Descripción:** Fase 5.3 (sesiones reales en Telegram) completa — [PR #14](https://github.com/JFrnck/Jin_Core/pull/14), **mergeado**.
+- **Repo:** `Jin_CLI`
+- **Descripción:** Fase 6.2 (CLI real en `Jin_CLI`) completa — [PR #3](https://github.com/JFrnck/Jin_CLI/pull/3), CI verde.
 - **Detalle de implementación:**
-  - Registro de los 8 ejecutores de herramientas faltantes a nivel `ClientService` en `ToolExecutorRegistry` (Google Gmail/Calendar y Canvas) para evitar doble log de auditoría y doble sanitizado — verificado por Claude Code al revisar: correcto, y ya era el patrón establecido desde Fase 4.2 (`sendEmail`/`deleteCalendarEventFuture`), no deuda nueva.
-  - Tabla Postgres `telegram_sessions` + migración, **renumerada de `0004_telegram_sessions` a `0005_telegram_sessions`** al mergear (`0004` ya lo había tomado `agent_ledger` de la Fase 5.4, mergeada primero) — mismo tipo de ajuste que el incidente de Jin_Infra #2/#3.
-  - Integración del Agent Loop (`AgentService.runTurn()`) y Memoria Extendida (`MemoryService`) en Telegram. Reconstrucción incremental del transcript por turno en Postgres.
-  - Ventana deslizante (últimos 20 mensajes + memorias sintéticas si se recuperan) para la llamada al modelo, pero consolidación con el **transcript COMPLETO** en Postgres al cerrar la sesión (`/endsession` o cron `@Cron('*/5 * * * *') checkSessionInactivity()`).
-  - Comando `/memory <query>` para consultar memorias a largo plazo en Telegram.
-  - 28 pruebas en `telegram-bot.service.spec.ts`, cobertura genuina (verificada, no superficial) de ventana deslizante vs. consolidación completa, inyección de memoria en sesión nueva, idempotencia de `/unpause`, propagación de errores del agent loop.
-- **Revisión de Claude Code antes de mergear** (checkout real de la rama + merge contra `main` actual, no solo el self-report): encontró y corrigió la colisión de migración de arriba, un merge conflict real en `schema.ts` (tablas de Fase 5.4 vs. `telegramSessions`), y un `session = created!;` reemplazado por chequeo explícito (mismo patrón que `audit.service.ts`, AGENTS.md 3.2). Verificado tras el fix: `tsc`/`lint`/298 tests unitarios/59 de integración (Postgres real)/smoke test de `AppModule` completo con env vars fake — todos verdes, `gh pr checks` real confirmado antes de mergear.
-
-
-
+  - `Jin_CLI` implementada usando **Ink v4**, **`openapi-fetch`**, **`socket.io-client`** y tipos TypeScript auto-generados con `openapi-typescript` desde `Jin_Core/contracts/openapi.json` (`pnpm generate:api`). Cero tipos copiados a mano.
+  - Almacenamiento seguro de credenciales Bearer JWT en `~/.config/jin/auth.json` con permisos POSIX `0600` (`fs.chmodSync(path, 0o600)`), garantizando acceso exclusivo al usuario del proceso OS.
+  - Comandos CLI completos: `jin login`, `jin status`, `jin tasks`, `jin approve <id>`, `jin reject <id>`, `jin chat`, y `jin memory <query>`.
+  - Continuidad de sesión interactiva en `jin chat` manteniendo `sessionId` (UUID) y acumulando `history: ModelMessage[]` en memoria del cliente Ink por turno.
+  - Manejo de estados de carga ("pensando...") para ejecuciones no-streaming del agente, captura de evento `disconnect` en Socket.IO para notificar tokens expirados, manejo de HTTP 429 (@Throttle 5/15m) en login, y manejo exhaustivo de outcomes HITL (`resolved`, `awaiting-second`, HTTP 409 `SecondApprovalTooEarlyError` tras confirmaciones <30s, HTTP 404).
+  - Suite de pruebas unitarias en AVA + `ink-testing-library` con Prettier y XO limpios (6/6 tests pasando, build TypeScript limpio, CI de GitHub Actions verde en `Jin_CLI`).
 
 ## Feedback Ronda 3 (Telegram) para Antigravity, enviado 2026-07-23
 
@@ -251,10 +247,21 @@ El owner pidió explícitamente web **completa, no un MVP recortado** — las 10
 **Verificación:** `pnpm typecheck` (`react-router typegen && tsc --noEmit`) limpio, `pnpm lint` limpio (1 warning esperado, mismo patrón que el template oficial de React Router), `pnpm build` limpio (SPA mode). Navegador real (Playwright headless, Chromium instalado en la sesión): las 10 pantallas + vista móvil (nav inferior de 4 ítems: Overview/Aprobar/Chat/Gasto) sin errores de consola tras el fix. CI real verde (`build` 19s). **No verificado:** flujo end-to-end contra `Jin_Core` corriendo local con Postgres/Redis reales y datos genuinos — esta sesión no levantó el backend completo, solo el dev server de Jin_Web contra un proxy sin destino.
 
 **Gaps reales encontrados y documentados, sin rellenar con datos falsos:**
-- `pendingApprovals` no tiene columna para "solicitado por `<agente>`" ni para inputs externos (`external_inputs_summary` existe en `audit_log`, no ahí) — la tarjeta de aprobación no muestra esos dos campos del diseño hasta extender el schema real en `Jin_Core`. Relevante: sin el campo de inputs externos, el endpoint REST de hitl no cumple la regla de oro #8 tal cual hoy.
+- ~~`pendingApprovals` no tiene columna para "solicitado por `<agente>`" ni para inputs externos~~ — **cerrado 2026-08-04**, ver sección dedicada abajo (Jin_Core PR #21 + Jin_Web PR #4).
 - No existe una tool/endpoint de "comentar código línea por línea" para el editor — se pidieron comentarios vía `/api/chat` con un formato de línea numerada parseado client-side (regex), documentado en el código como puente, no como feature con contrato propio.
 - Íconos PWA son el favicon placeholder del template (`favicon.svg`), no el ícono 512px maskable que pide el diseño §09 — necesita un asset real, no generable en esta sesión.
 - El widget "sesión actual" del panel de presupuesto (v1/v2 del diseño) no tiene equivalente backend limpio — ya resuelto en v3 reemplazándolo por "última hora", que sí usa datos reales de la Fase 6.1.1.
+
+## HITL: actor + inputs externos en pendingApprovals (Jin_Core PR #21 + Jin_Web PR #4, 2026-08-04)
+
+Cierra el gap documentado en Fase 6.2+6.3: `pendingApprovals` no tenía columna para "solicitado por `<agente>`" ni para inputs externos — `audit_log` sí las tiene (`actor`/`external_inputs_summary`), pero solo se escriben ahí DESPUÉS de resolverse la aprobación. Sin esto, `GET /api/hitl/pending` no cumplía `AGENTS.md` §5.1 punto 3 en el momento en que más importa: antes de que el owner decida, no solo en el rastro posterior.
+
+- **Migración 0006** (`pending_approvals.actor`/`external_inputs_summary`, mismos nombres que `audit_log`). Hallazgo real en el camino: `drizzle-kit generate` producía una migración que recreaba 5 tablas ya existentes — el snapshot chain de drizzle-kit (`drizzle/meta/*.json`) nunca tuvo entradas para las migraciones 0003-0005 (se escribieron a mano, sin snapshot, precedente ya establecido en el repo). Se descartó el auto-generado y se escribió 0006 a mano siguiendo el mismo patrón (`CREATE ... IF NOT EXISTS` / `ALTER ... ADD COLUMN IF NOT EXISTS`).
+- **`summarizeUntrustedSources()`** (nuevo, `src/security/injection-sanitizer.ts`): contraparte de lectura de `wrapUntrustedContent` (Fase 5.1/ADR 0004). En `agent.service.ts::runTurn`, el array `messages` nunca se poda — al clasificar una tool `confirm`/`dual-confirm` en la iteración N, ya contiene los `tool_result` envueltos (`<untrusted_content_{nonce} source="...">`) de las tools `auto`/`notify` de las iteraciones 1..N-1 del mismo turno. La función extrae esos `source` (regex sobre el tag) y cuenta ocurrencias — la traza real de qué pudo influir en la decisión del LLM, no un resumen inventado.
+- `agent.service.ts` pasa `actor`(=`actorLabel`)/`externalInputsSummary` reales. `orchestrator.service.ts` (conflictos entre sub-agentes) pasa solo `actor:'orchestrator'` — ese path no corre un turno de LLM (compara tickets ya completados), así que no hay `messages` del que extraer nada; forzar un valor ahí sería inventar dato, documentado así en el código.
+- `Jin_Web/ApprovalCard.tsx` muestra ambos campos ("Solicitado por: ...", "Influido por: ...") cuando no son null.
+
+**Verificación real, no solo tipos:** 337 unit + 68 integración (Postgres real vía testcontainers, incluye el path de orchestrator) + 19 e2e (contrato serializado por el pipeline real) en Jin_Core; `typecheck`/`lint`/`build` limpios en Jin_Web. Smoke manual con el stack local (`docker-compose.dev.yaml`): fila real insertada en Postgres, Playwright confirma que la card del dashboard muestra "Solicitado por: web-chat" / "Influido por: readEmails (2), listCalendarEvents (1)" con los valores reales, no placeholders.
 
 ## Local dev tooling — Postgres/Redis (Jin_Infra PR #7 + Jin_Core PR #20, 2026-08-04)
 
