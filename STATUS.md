@@ -330,7 +330,7 @@ Los tres viven en el mismo tejido: el sistema HITL/audit no le avisa al humano n
 
 **Efecto colateral esperado y corregido:** varios tests de integración asumían que `createPendingApproval` no dejaba rastro en `audit_log` (0 filas) o que solo la resolución dejaba 1 — ahora hay una fila más desde el momento de creación. 4 archivos actualizados con la nueva cuenta esperada y comentarios explicando el porqué. También se encontró y corrigió un gap real de wiring: `timeout.service.integration.spec.ts` no importaba `EventEmitterModule`, necesario ahora que `TimeoutService` depende de `EventEmitter2` — sin el fix, ese test hubiera fallado en CI con un error de resolución de dependencias.
 
-**Verificación:** 352 unit (57 archivos, +2 specs nuevos que no existían — `chain-verification.service.spec.ts`/`timeout.service.spec.ts`, cierran de paso parte de la Recomendación #21) + 19 e2e, `tsc --noEmit`/`lint`/`build` limpios, contrato sin diff (no se tocó ningún controller). `test:integration` no se pudo correr localmente (Docker apagado) — CI del PR en curso.
+**Verificación (CI verde confirmado):** 352 unit (57 archivos, +2 specs nuevos que no existían — `chain-verification.service.spec.ts`/`timeout.service.spec.ts`, cierran de paso parte de la Recomendación #21) + 19 e2e, `tsc --noEmit`/`lint`/`build` limpios, contrato sin diff. `test:integration` (K3s/Postgres real, no se pudo correr localmente por Docker apagado) verificado en el CI del PR: 10/10 archivos, 71/71 tests, incluida la migración `0007_audit_chain_lock` aplicándose limpia. PR #24 listo para revisión del owner.
 
 ## Fase 0.1 debug #1 — punto 10+26 resuelto, punto 28 abierto (Jin_Executor PR #6, 2026-08-05)
 
