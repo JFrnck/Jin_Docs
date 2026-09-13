@@ -32,6 +32,16 @@
 
 **Estado real: código 100% en `main`, imágenes publicadas, nada mergeable pendiente.** Lo único que falta para un deploy real es ejecutar el runbook en la VM (secretos reales, prerrequisitos de Cloudflare/GHCR/Flux) — eso es manual del owner, guiado paso a paso.
 
+## Fase 8.1 — Infisical SDK en runtime (2026-09-13, PRs abiertos)
+
+BLUEPRINT §11 decía "core y Executor los cargan al startup vía SDK; nunca están en env plain" pero era exactamente al revés — verificado con 0 ocurrencias del SDK en ambos repos. [Jin_Core #29](https://github.com/JFrnck/Jin_Core/pull/29) y [Jin_Executor #11](https://github.com/JFrnck/Jin_Executor/pull/11): `loadSecrets()` (`src/config/secrets-loader.ts`) corre en `main.ts` antes de `NestFactory.create`, vuelca los secretos a `process.env` antes de que `ConfigModule.forRoot` los lea, y `env.schema.ts` sigue siendo la única fuente de verdad del contrato fail-fast, sin tocarse. No-op si `INFISICAL_ENABLED!='true'` — dev local con `.env` intacto. Tests con el SDK mockeado: no-op, éxito, login falla, subset incompleto de claves.
+
+`INFISICAL_CLIENT_ID`/`CLIENT_SECRET` (credenciales de la identidad de máquina) y `DATABASE_URL`/`REDIS_URL` son la excepción documentada que sigue fuera de Infisical (huevo-gallina de infra) — alcance tomado literalmente del comentario ya escrito en `02-seed-secrets.sh` desde Fase 7.1, no una decisión nueva.
+
+[Jin_Infra #12](https://github.com/JFrnck/Jin_Infra/pull/12): Deployments de jin-core/executor con `envFrom` a un Secret de identidad nuevo por servicio (`jin-core-infisical-auth`/`jin-executor-infisical-auth`, identidades separadas por menor privilegio), `jin-core-secrets`/`jin-executor-secrets` reducidos, y `scripts/bootstrap/08-seed-infisical-app-secrets.sh` nuevo. **Gate manual real, no resuelto por código:** crear el proyecto + las 2 identidades de máquina dentro de Infisical requiere sesión interactiva contra un servicio recién levantado sin ningún admin todavía (mismo motivo que el gate de Flux) — documentado como paso nuevo en el runbook (§7.6 de `docs/runbooks/oci-deploy-prep.md`, renumerado el resto de §7). `INFISICAL_PROJECT_ID` queda con un placeholder explícito en los Deployments hasta que ese paso se ejecute — es la señal correcta de que jin-core/executor no van a llegar a `Ready` todavía, no un bug.
+
+Verificado: 393/393 tests de Jin_Core, 90/90 de Jin_Executor (unitarios, sin integración K3s), `kubectl kustomize` + kube-linter v0.8.3 limpios en Jin_Infra, shellcheck limpio. Build de Jin_Core expuso y corrigió un error real de `exactOptionalPropertyTypes` con el SDK de Infisical.
+
 ### Antigravity
 
 - **Repo:** `Jin_CLI`
@@ -210,7 +220,7 @@ Los `"name": "temp-*"` de `package.json` en Web y CLI ya no aplican como pendien
 18. **Fase 6.3** [Claude Code] — ✅ hecho, mismo [PR #3](https://github.com/JFrnck/Jin_Web/pull/3) (Monaco + Zone Widgets + preview apps — construidas junto con 6.2 a pedido del owner, no en dos PRs separados).
 19. **Fase 6.4** [Antigravity] — ✅ hecho, [PR #3](https://github.com/JFrnck/Jin_CLI/pull/3) Jin_CLI (CLI con Ink: login/status/tasks/approve/reject/chat/memory). Revisada por Claude Code en 3 rondas antes de implementar (ver sección dedicada abajo) + [PR #4](https://github.com/JFrnck/Jin_CLI/pull/4) (fix de falso positivo de GitGuardian).
 20. **Fase 7.1** [Claude Code] — Deploy real de las apps + Flux GitOps (Jin_Infra + Dockerfiles). **Código cerrado 2026-08-06** (imágenes en GHCR, manifests listos). **Ejecución real en la VM pospuesta al final del roadmap — ver decisión del owner 2026-08-07 arriba.**
-21. **Fase 8.1** [Claude Code] — Infisical SDK en runtime (Core + Executor). **Va antes de 7.2** — ver auditoría abajo.
+21. **Fase 8.1** [Claude Code] — ✅ código en PR, pendiente merge y ejecución del paso manual. Infisical SDK en runtime: [Jin_Core #29](https://github.com/JFrnck/Jin_Core/pull/29), [Jin_Executor #11](https://github.com/JFrnck/Jin_Executor/pull/11), [Jin_Infra #12](https://github.com/JFrnck/Jin_Infra/pull/12). Ver sección dedicada abajo.
 22. **Fase 7.2** [Claude Code] — Runbook de activación real (secretos reales, OAuth consent, webhook Telegram, smoke test E2E).
 23. **Fase 8.2** [Claude Code] — Golden set de prompt injection (~50 adversariales, BLUEPRINT §13.1 obligatorio). **Va antes de 7.3.**
 24. **Fase 7.3** [Claude Code] — Hardening: auditoría de seguridad completa, chaos tests, MCP servers.
@@ -221,7 +231,7 @@ Los `"name": "temp-*"` de `package.json` en Web y CLI ya no aplican como pendien
 29. **Fase 9.5** [Claude Code] — Feature flags en caliente (ConfigMap + SIGHUP).
 30. **Fase 9.6** [Antigravity] — Comandos de administración en la CLI + menús navegables.
 
-Dependencias: 5.1 → (5.2, 5.3, 5.4) → 5.5 (tras 5.2) → 6.1 → (6.2+6.3 en secuencia [Claude Code], 6.4 [Antigravity] en paralelo) → 7.1 (código, ✅ cerrado) → **8.1 → 8.2 → 7.3 → Fase 9 completa (9.1-9.6, cualquier orden interno) → ejecución real de 7.1 en la VM → 7.2**. **Fases 1-7.1(código) completas. Decisión del owner 2026-08-07: el deploy real (ejecución en la VM + activación) se pospone hasta terminar el resto del roadmap completo, Fase 9 incluida — ver "Decisiones del owner". Siguiente en la cola: 8.1 (Infisical SDK en runtime).**
+Dependencias: 5.1 → (5.2, 5.3, 5.4) → 5.5 (tras 5.2) → 6.1 → (6.2+6.3 en secuencia [Claude Code], 6.4 [Antigravity] en paralelo) → 7.1 (código, ✅ cerrado) → **8.1 (código en PR, pendiente merge) → 8.2 → 7.3 → Fase 9 completa (9.1-9.6, cualquier orden interno) → ejecución real de 7.1 en la VM → 7.2**. **Fases 1-7.1(código) completas, 8.1 en PR. Decisión del owner 2026-08-07: el deploy real (ejecución en la VM + activación) se pospone hasta terminar el resto del roadmap completo, Fase 9 incluida — ver "Decisiones del owner". Siguiente en la cola tras mergear 8.1: 8.2 (golden set de prompt injection).**
 
 **Nota de numeración:** el número es una etiqueta, no un orden de ejecución — 8.1 corre antes que 7.2 a propósito (ver auditoría). Ya hay precedente en este roadmap: la Fase 3.1 se ejecutó antes que la 2.4.
 

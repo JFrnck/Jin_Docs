@@ -215,7 +215,8 @@ El system prompt de cada agente debe incluir literalmente:
 ### 5.2 Secretos
 
 - **Ningún secreto** en código, en env plain, ni en Git.
-- Todo secreto se carga desde Infisical vía el SDK oficial en el startup del proceso.
+- Todo secreto se carga desde Infisical vía el SDK oficial en el startup del proceso — implementado en Fase 8.1 (`src/config/secrets-loader.ts` en Jin_Core y Jin_Executor).
+- Excepción de bootstrap (ver BLUEPRINT §11): `DATABASE_URL`/`REDIS_URL` y las credenciales de la identidad de máquina de Infisical de cada servicio siguen en un Secret de K8s, no en Infisical mismo.
 - Detección pre-commit: `gitleaks` en pre-commit hook (configurado en `.pre-commit-config.yaml` de cada repo).
 - Si accidentalmente commiteas un secreto: rotarlo inmediatamente. `git rm --cached` NO es suficiente.
 

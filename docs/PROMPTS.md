@@ -823,6 +823,8 @@ ANTES DE IMPLEMENTAR: Propón el plan. Espera aprobación.
 
 ### 8.1 [CLAUDE CODE] — Infisical SDK en runtime (repos: Jin_Core + Jin_Executor)
 
+**Código listo, 2026-09-13** — [Jin_Core #29](https://github.com/JFrnck/Jin_Core/pull/29), [Jin_Executor #11](https://github.com/JFrnck/Jin_Executor/pull/11), [Jin_Infra #12](https://github.com/JFrnck/Jin_Infra/pull/12). El alcance real terminó tocando también Jin_Infra (Deployments + `02-seed-secrets.sh` + script nuevo de identidades), no solo Core/Executor como decía este prompt originalmente — necesario para que el diseño fuera real y no solo teórico. Ver `STATUS.md` sección "Fase 8.1" para el detalle técnico y el gate manual pendiente (crear el proyecto/identidades en Infisical).
+
 ```
 BLUEPRINT §11 dice literal: "core y Executor los cargan al startup vía SDK; nunca están en env plain". Hoy es exactamente al revés: todo pasa por `src/config/env.schema.ts` como env vars planas, y el SDK de Infisical no está importado en ningún lado (verificado: cero ocurrencias en `src/`). El manifest de Infisical SÍ existe y se despliega (Jin_Infra `k8s/base/infisical`, Fase 1.1) — lo que falta es que las apps lo consuman.
 

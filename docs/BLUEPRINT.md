@@ -519,6 +519,7 @@ Tres niveles de presupuesto, todos configurables en `config/budget.yaml`:
 - **Infisical** self-hosted como Deployment en K3s (open-source, panel usable, SDK Node).
 - Todos los secretos viven en Infisical: API keys, PATs, tokens OAuth, JWT signing key.
 - core y Executor los cargan al startup vía SDK; nunca están en env plain.
+- **Excepción explícita, Fase 8.1:** `DATABASE_URL`/`REDIS_URL` (con la password de Postgres/Redis embebida) siguen viniendo de un Secret de K8s sembrado por `02-seed-secrets.sh`, no de Infisical — mismo problema de huevo-gallina que las credenciales de bootstrap de Infisical (Postgres/Redis/Infisical arrancan juntos, antes de que Infisical tenga nada que servir). Las credenciales de la identidad de máquina (`INFISICAL_CLIENT_ID`/`SECRET`) de cada servicio son, por el mismo motivo, el único otro secreto fuera de Infisical.
 - **Master key de Infisical** cifrada con `age`, guardada en dos lugares:
   - Llavero local del owner (Bitwarden / 1Password).
   - Backup encriptado en R2 con llave separada.

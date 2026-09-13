@@ -173,9 +173,9 @@ Estos **no los puede resolver un agente automatizado** porque requieren sesión 
 - [ ] GitHub PAT con scope `repo` (lo usa `05-flux-bootstrap.sh` para el GitOps sobre `Jin_Infra`).
 - [ ] Flux CLI instalado a mano en la VM — **es un gate deliberado, no automatizable**: instalar un controlador GitOps con permisos cluster-wide requiere intervención humana consciente. El comando exacto (con verificación de checksum) te lo imprime `scripts/bootstrap/05-flux-bootstrap.sh` si intentás correrlo sin tenerlo instalado — seguí esas instrucciones al pie de la letra, no lo automatices.
 
-Y los valores para los Secrets que pide `02-seed-secrets.sh` (ver el bloque de comentarios al inicio de ese archivo para la lista completa y actualizada — no la dupliques de memoria acá, ese archivo es la fuente de verdad). Cubre desde credenciales de Postgres/Redis hasta las API keys de los proveedores de LLM, Telegram, Google OAuth y Modal.
+Y los valores para los Secrets que pide `02-seed-secrets.sh` (ver el bloque de comentarios al inicio de ese archivo para la lista completa y actualizada — no la dupliques de memoria acá, ese archivo es la fuente de verdad). Desde Fase 8.1, ese script cubre solo la infra de bootstrap (Postgres/Redis/Infisical/Cloudflare/backups/GHCR) — las API keys de los proveedores de LLM, Telegram, Google OAuth y Modal ya no van ahí: se cargan directo en Infisical en §7.6 (`08-seed-infisical-app-secrets.sh`), después de que el clúster (e Infisical con él) esté arriba.
 
-**Nota importante:** para que los pods de `jin-core`/`jin-executor` lleguen a estado `Ready`, alcanza con que estas variables sean strings no vacíos sintácticamente válidos (la validación al arrancar es de forma, no verifica que la key realmente funcione contra el proveedor real). Los valores **reales y funcionales** para que las integraciones (Google OAuth, Telegram, etc.) sirvan de verdad son necesarios recién en la Fase 7.2. Aun así, si el owner ya tiene los valores reales a mano, usalos desde ahora — evita rotar credenciales dos veces.
+**Nota importante:** para que los pods de `jin-core`/`jin-executor` lleguen a estado `Ready`, alcanza con que esas 15 claves sean strings no vacíos sintácticamente válidos en Infisical (la validación al arrancar es de forma, no verifica que la key realmente funcione contra el proveedor real). Los valores **reales y funcionales** para que las integraciones (Google OAuth, Telegram, etc.) sirvan de verdad son necesarios recién en la Fase 7.2. Aun así, si el owner ya tiene los valores reales a mano, usalos desde ahora — evita rotar credenciales dos veces.
 
 ---
 
@@ -235,7 +235,25 @@ bash scripts/bootstrap/04-apply-manifests.sh
 ```
 Este script ya espera (`rollout status`) a que todos los Deployments/StatefulSets queden listos, incluidos `jin-core` y `executor` — si se cuelga en alguno, el problema está ahí, no sigas.
 
-### 7.6 `05-flux-bootstrap.sh`
+### 7.6 `08-seed-infisical-app-secrets.sh` (Fase 8.1)
+
+Con el clúster arriba (7.5), Infisical ya está corriendo pero vacío — sin proyecto, sin identidades, sin las 15 claves reales de Core/Executor. Este paso es manual por el mismo motivo que Flux (§7.7/§6): es sesión interactiva contra un servicio recién levantado sin ningún admin todavía, no se puede scriptear a ciegas.
+
+1. Port-forward a la UI: `kubectl -n jin port-forward svc/infisical 8080:8080`, abrí `http://localhost:8080` y creá la cuenta admin.
+2. Creá el proyecto `jin`, confirmá/creá el environment `prod`, y cargá ahí las 13 claves reales de Jin_Core + las 2 de Jin_Executor (lista exacta: cabecera de `Jin_Core/src/config/secrets-loader.ts` y `Jin_Executor/src/config/secrets-loader.ts`).
+3. Settings del proyecto → Identities → creá **dos** identidades con auth method Universal Auth: `jin-core` (acceso de lectura solo a las 13 claves de Core) y `jin-executor` (acceso de lectura solo a `MODAL_TOKEN_ID`/`MODAL_TOKEN_SECRET`). Cada una te da un Client ID + Client Secret nuevos.
+4. Anotá el Project ID (Settings → General) y reemplazá el placeholder `PENDIENTE_CREAR_PROYECTO_INFISICAL` en `k8s/base/jin-core/deployment.yaml` y `k8s/base/executor/deployment.yaml` por el valor real — mismo flujo de PR que cualquier cambio de manifest, no directo a `main`.
+5. Con las 4 credenciales de identidad a mano, corré el script (mecánico, sí scripteable — solo mete esos 4 valores en 2 Secrets de K8s):
+
+```bash
+export INFISICAL_CORE_CLIENT_ID=... INFISICAL_CORE_CLIENT_SECRET=...
+export INFISICAL_EXECUTOR_CLIENT_ID=... INFISICAL_EXECUTOR_CLIENT_SECRET=...
+bash scripts/bootstrap/08-seed-infisical-app-secrets.sh
+```
+
+Hasta que el PR del punto 4 se mergee y Flux (o un `kubectl apply` manual) lo aplique, `jin-core`/`executor` no van a llegar a `Ready` — es la señal correcta de que falta ese paso, no un error.
+
+### 7.7 `05-flux-bootstrap.sh`
 Activa GitOps: de acá en adelante, un `git push` a `main` de `Jin_Infra` reconcilia el clúster solo.
 ```bash
 export GITHUB_TOKEN=...   # el PAT con scope repo de §6
@@ -243,7 +261,7 @@ bash scripts/bootstrap/05-flux-bootstrap.sh
 ```
 Si `flux` no está instalado, el script se detiene e imprime instrucciones con verificación de checksum — es a propósito (ver §6), no lo saltees ni lo automatices.
 
-### 7.7 `06-prepull-deno.sh` y `07-sysctl-inotify.sh`
+### 7.8 `06-prepull-deno.sh` y `07-sysctl-inotify.sh`
 Tuning del nodo — pre-descarga la imagen de Deno que usan los pods efímeros de ejecución, y sube el límite de `inotify` (sin esto, el hot-reload de los pods de servicio falla en silencio).
 ```bash
 bash scripts/bootstrap/06-prepull-deno.sh
