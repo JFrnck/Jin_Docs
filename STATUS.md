@@ -42,6 +42,16 @@ BLUEPRINT §11 decía "core y Executor los cargan al startup vía SDK; nunca est
 
 Verificado: 393/393 tests de Jin_Core, 90/90 de Jin_Executor (unitarios, sin integración K3s), `kubectl kustomize` + kube-linter v0.8.3 limpios en Jin_Infra, shellcheck limpio. Build de Jin_Core expuso y corrigió un error real de `exactOptionalPropertyTypes` con el SDK de Infisical.
 
+## Fase 8.2 — Golden set de prompt injection (2026-09-13, PR abierto)
+
+BLUEPRINT §13.1, obligatorio: corpus de ~50 prompts adversariales. No existía — `injection-sanitizer.spec.ts` cubría la unidad, no un corpus versionado. [Jin_Core #30](https://github.com/JFrnck/Jin_Core/pull/30): `src/security/golden-set/corpus.ts`, 50 entradas en 8 categorías (delimiter-close, fake-nonce, other-language, encoded-payload, ignore-instructions, hitl-escalation, fake-approval, mimic-tool-result), cada una documentando qué ataque representa.
+
+No se prueba que un LLM real "se porte bien" (no es determinístico) — se prueba que el pipeline mecánico que recibe estos payloads se mantiene correcto sin importar el contenido, contra 3 specs nuevos: `corpus-sanitizer.spec.ts` (84 tests: `wrapUntrustedContent`/`sanitizeForIndexing`, ADR 0004, nunca dejan un `<`/`>` crudo ni un cierre de tag fabricado que sobreviva sin escapar; `fake-nonce` se corre también con un segundo nonce real, para dejar explícito que la garantía depende del escapado, no de que el atacante desconozca el nonce), `corpus-classifier.spec.ts` (19 tests: `classifyToolCall` deriva el `hitlLevel` solo del registry, nunca de los inputs, contra 3 tools `confirm` reales), `agent-pipeline.spec.ts` (12 tests: reusa el scaffolding de `agent.service.spec.ts` — ninguna tool `confirm` ejecuta sin pasar por `DualConfirmService`, incluso cuando el payload llega dentro del `tool_result` de una tool `auto` previa, simulando un correo hostil real).
+
+**Criterio de éxito verificado** ("al menos 3 fallan si se comenta el escapado"): con `escapeDelimiterChars` temporalmente desactivado, **34 de los 84** tests de `corpus-sanitizer.spec.ts` fallan de verdad — bien por encima del mínimo. Revertido antes de commitear, no queda código temporal en el PR.
+
+Verificado: 504/504 tests de Jin_Core (393 preexistentes + 115 nuevos, con overlap menor en el conteo agregado), build y lint limpios.
+
 ### Antigravity
 
 - **Repo:** `Jin_CLI`
@@ -222,7 +232,7 @@ Los `"name": "temp-*"` de `package.json` en Web y CLI ya no aplican como pendien
 20. **Fase 7.1** [Claude Code] — Deploy real de las apps + Flux GitOps (Jin_Infra + Dockerfiles). **Código cerrado 2026-08-06** (imágenes en GHCR, manifests listos). **Ejecución real en la VM pospuesta al final del roadmap — ver decisión del owner 2026-08-07 arriba.**
 21. **Fase 8.1** [Claude Code] — ✅ código en PR, pendiente merge y ejecución del paso manual. Infisical SDK en runtime: [Jin_Core #29](https://github.com/JFrnck/Jin_Core/pull/29), [Jin_Executor #11](https://github.com/JFrnck/Jin_Executor/pull/11), [Jin_Infra #12](https://github.com/JFrnck/Jin_Infra/pull/12). Ver sección dedicada abajo.
 22. **Fase 7.2** [Claude Code] — Runbook de activación real (secretos reales, OAuth consent, webhook Telegram, smoke test E2E).
-23. **Fase 8.2** [Claude Code] — Golden set de prompt injection (~50 adversariales, BLUEPRINT §13.1 obligatorio). **Va antes de 7.3.**
+23. **Fase 8.2** [Claude Code] — ✅ código en PR, pendiente merge. Golden set de prompt injection: [Jin_Core #30](https://github.com/JFrnck/Jin_Core/pull/30). Ver sección dedicada abajo.
 24. **Fase 7.3** [Claude Code] — Hardening: auditoría de seguridad completa, chaos tests, MCP servers.
 25. **Fase 9.1** [Antigravity] — Notion + comando `/audio` (transcripción).
 26. **Fase 9.2** [Claude Code] — GitHub App + capacidad git real (desbloquea `mergeAgentBranch`, hoy 501).
@@ -231,7 +241,7 @@ Los `"name": "temp-*"` de `package.json` en Web y CLI ya no aplican como pendien
 29. **Fase 9.5** [Claude Code] — Feature flags en caliente (ConfigMap + SIGHUP).
 30. **Fase 9.6** [Antigravity] — Comandos de administración en la CLI + menús navegables.
 
-Dependencias: 5.1 → (5.2, 5.3, 5.4) → 5.5 (tras 5.2) → 6.1 → (6.2+6.3 en secuencia [Claude Code], 6.4 [Antigravity] en paralelo) → 7.1 (código, ✅ cerrado) → **8.1 (código en PR, pendiente merge) → 8.2 → 7.3 → Fase 9 completa (9.1-9.6, cualquier orden interno) → ejecución real de 7.1 en la VM → 7.2**. **Fases 1-7.1(código) completas, 8.1 en PR. Decisión del owner 2026-08-07: el deploy real (ejecución en la VM + activación) se pospone hasta terminar el resto del roadmap completo, Fase 9 incluida — ver "Decisiones del owner". Siguiente en la cola tras mergear 8.1: 8.2 (golden set de prompt injection).**
+Dependencias: 5.1 → (5.2, 5.3, 5.4) → 5.5 (tras 5.2) → 6.1 → (6.2+6.3 en secuencia [Claude Code], 6.4 [Antigravity] en paralelo) → 7.1 (código, ✅ cerrado) → **8.1 (código en PR, pendiente merge) → 8.2 (código en PR, pendiente merge) → 7.3 → Fase 9 completa (9.1-9.6, cualquier orden interno) → ejecución real de 7.1 en la VM → 7.2**. **Fases 1-7.1(código) completas, 8.1 y 8.2 en PR. Decisión del owner 2026-08-07: el deploy real (ejecución en la VM + activación) se pospone hasta terminar el resto del roadmap completo, Fase 9 incluida — ver "Decisiones del owner". Siguiente en la cola tras mergear 8.1/8.2: 7.3 (hardening: auditoría de seguridad completa, chaos tests, MCP servers).**
 
 **Nota de numeración:** el número es una etiqueta, no un orden de ejecución — 8.1 corre antes que 7.2 a propósito (ver auditoría). Ya hay precedente en este roadmap: la Fase 3.1 se ejecutó antes que la 2.4.
 

@@ -857,6 +857,8 @@ ANTES DE IMPLEMENTAR: Propón el plan. Espera aprobación.
 
 ### 8.2 [CLAUDE CODE] — Golden set de prompt injection (repo: Jin_Core)
 
+**Código listo, 2026-09-13** — [Jin_Core #30](https://github.com/JFrnck/Jin_Core/pull/30), 50 entradas en 8 categorías. Ver `STATUS.md` sección "Fase 8.2" para el detalle técnico y la verificación del criterio "al menos 3 fallan si se comenta el escapado" (34 de 84 fallaron).
+
 ```
 BLUEPRINT §13.1 lista como **OBLIGATORIO**: "Prompt injection golden set: corpus de ~50 prompts adversariales conocidos; el sistema debe manejarlos correctamente". Verificado: no existe (cero archivos golden/adversarial en el repo). Hoy `injection-sanitizer.spec.ts` cubre el escapado de delimitador y el nonce, que es la unidad — no el sistema end-to-end contra un corpus real.
 
