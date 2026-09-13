@@ -69,29 +69,34 @@ Cuatro capas, comunicándose siempre en la dirección declarada:
 ### 3.1 VM principal
 
 - **Oracle Cloud Infrastructure Always Free**, instancia ARM Ampere.
-- Recursos: 4 vCPU · 24 GB RAM · 200 GB block storage.
+- Recursos: 2 vCPU · 12 GB RAM · 200 GB block storage.
 - OS: Ubuntu 24.04 LTS.
 - Región: la más cercana a tu ubicación actual con Always Free disponible.
 
 #### 3.1.1 Presupuesto de recursos (obligatorio)
 
-Total disponible tras reservar SO/K3s: **20 GB RAM, 3.5 vCPU**.
+Total disponible tras reservar SO/K3s: **10 GB RAM, 1.5 vCPU**.
 
 | Componente              | Requests (RAM) | Limits (RAM)   | Requests (CPU) | Limits (CPU)    |
 | ----------------------- | -------------- | -------------- | -------------- | --------------- |
-| Postgres (con pgvector) | 4 Gi           | 6 Gi           | 500m           | 1500m           |
-| Redis                   | 512 Mi         | 1 Gi           | 100m           | 500m            |
-| Infisical               | 256 Mi         | 512 Mi         | 50m            | 200m            |
-| jin-core (1 réplica) | 512 Mi         | 1 Gi           | 200m           | 800m            |
-| jin-executor         | 256 Mi         | 512 Mi         | 100m           | 400m            |
-| Traefik                 | 128 Mi         | 256 Mi         | 50m            | 200m            |
-| cloudflared             | 64 Mi          | 128 Mi         | 50m            | 100m            |
-| Prometheus              | 512 Mi         | 1 Gi           | 100m           | 300m            |
-| Loki                    | 256 Mi         | 512 Mi         | 100m           | 300m            |
-| Grafana                 | 256 Mi         | 512 Mi         | 50m            | 200m            |
-| cert-manager            | 64 Mi          | 128 Mi         | 50m            | 100m            |
-| Flux                    | 128 Mi         | 256 Mi         | 50m            | 200m            |
-| **agents-sandbox pool** | —              | **6 Gi techo** | —              | **1500m techo** |
+| Postgres (con pgvector) | 1.5 Gi         | 3 Gi           | 250m           | 1000m           |
+| Redis                   | 256 Mi         | 512 Mi         | 50m            | 250m            |
+| Infisical               | 192 Mi         | 384 Mi         | 50m            | 200m            |
+| jin-core (1 réplica) | 512 Mi         | 1 Gi           | 150m           | 600m            |
+| jin-executor         | 192 Mi         | 384 Mi         | 50m            | 300m            |
+| Traefik                 | 64 Mi          | 128 Mi         | 50m            | 150m            |
+| cloudflared             | 64 Mi          | 128 Mi         | 25m            | 100m            |
+| Prometheus              | 320 Mi         | 512 Mi         | 50m            | 250m            |
+| Loki                    | 160 Mi         | 256 Mi         | 50m            | 250m            |
+| Grafana                 | 160 Mi         | 256 Mi         | 25m            | 150m            |
+| promtail (DaemonSet)    | 64 Mi          | 128 Mi         | 25m            | 100m            |
+| cert-manager (3 pods)   | 192 Mi         | 384 Mi         | 75m            | 300m            |
+| Flux (4 controllers)    | 256 Mi         | 512 Mi         | 100m           | 400m            |
+| **agents-sandbox pool** | —              | **2 Gi techo** | —              | **1000m techo** |
+
+Suma: **~3.9 Gi de requests** y **~9.5 Gi de limits** (pool de sandbox incluido) sobre los 10 Gi disponibles. Los ~0.5 Gi restantes absorben los CronJobs de backup (§3.5), que corren de noche y no están en la tabla porque son efímeros.
+
+**cert-manager y Flux no se instalan desde `Jin_Infra`** (manifest oficial pinneado y `flux bootstrap` respectivamente), así que sus valores en esta tabla son una **reserva contable**, no `resources` que este repo declare: cert-manager son 3 Deployments (controller, webhook, cainjector) y Flux 4 controllers, todos sin `resources` en sus manifests upstream. Si el nodo queda ajustado, ese es el primer lugar donde mirar.
 
 Los pods efímeros consumen del pool `agents-sandbox` mediante ResourceQuota a nivel de namespace, no requests individuales. **La quota es un techo de ráfaga, no una reserva: sin tareas corriendo, el consumo del namespace es cero** (no hay warm pool — ver 4.4).
 

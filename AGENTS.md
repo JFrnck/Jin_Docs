@@ -171,8 +171,8 @@ Jin_Core/
 Ningún `Deployment`, `StatefulSet`, `DaemonSet`, ni `Job` puede mergearse a `main` sin `resources.requests` y `resources.limits` explícitos para `cpu` y `memory`.
 
 - Los pods del namespace `agents-sandbox` (código LLM-generado ejecutándose) deben tener:
-  - `limits.memory` estricto proporcional al tier de tarea (default 512Mi, máximo 2Gi).
-  - `limits.cpu` restrictivo (default 500m, máximo 1500m).
+  - `limits.memory` estricto proporcional al tier de tarea (default 512Mi, máximo 1Gi).
+  - `limits.cpu` restrictivo (default 500m, máximo 1000m).
 
 - Regla de proporción: `limits.memory` ≥ 1.5 × `requests.memory`, nunca > 3 × `requests.memory`.
 
