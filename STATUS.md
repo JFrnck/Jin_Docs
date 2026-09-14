@@ -76,6 +76,20 @@ El golden set de prompt injection de Fase 8.2 se cita como evidencia ya cerrada 
 
 **Fase 7.3 completa — las 4 partes (A/B/C/D) en PR o mergeadas a `main` de Jin_Docs.** PRs abiertos pendientes de revisión del owner: [Jin_Core #29](https://github.com/JFrnck/Jin_Core/pull/29)/[#30](https://github.com/JFrnck/Jin_Core/pull/30)/[#31](https://github.com/JFrnck/Jin_Core/pull/31), [Jin_Executor #10](https://github.com/JFrnck/Jin_Executor/pull/10)/[#11](https://github.com/JFrnck/Jin_Executor/pull/11), [Jin_Infra #11](https://github.com/JFrnck/Jin_Infra/pull/11)/[#12](https://github.com/JFrnck/Jin_Infra/pull/12)/[#13](https://github.com/JFrnck/Jin_Infra/pull/13)/[#14](https://github.com/JFrnck/Jin_Infra/pull/14).
 
+## Fase 9.3 — RAG de corpus propio en pgvector (2026-09-14, PR abierto, CI verde)
+
+BLUEPRINT §3.3.1 traza la mitad que faltaba de la frontera pgvector/sqlite-vec: pgvector ya viene en la imagen de Postgres y la extensión se crea al primer arranque (`Jin_Infra/k8s/base/postgres/init-configmap.yaml`), pero ningún módulo la usaba — solo existía la mitad `sqlite-vec` (memoria del agente, Fase 4.3). [Jin_Core #33](https://github.com/JFrnck/Jin_Core/pull/33) + [ADR 0009](docs/adr/0009-corpus-pgvector.md).
+
+**Fuente elegida: correos (Gmail)**, no PDFs de Canvas ni notas — ya tiene toda la plomería real (`GoogleGmailClientService`, OAuth desde Fase 4.2), cero trabajo previo pendiente; las otras dos quedan documentadas como extensión futura sin stubs vacíos (agregar una fuente nueva es solo un nuevo caller, `corpus_entries`/`corpus_embeddings` ya son agnósticas de fuente). Dos tablas (nunca una sola denormalizada) para ejercitar de verdad el JOIN relacional que justifica pgvector sobre Qdrant/Supabase (§3.3). `vector()` nativo de drizzle-orm 0.45 — sin paquete `pgvector` npm nuevo. Dedup real a nivel de DB (`UNIQUE (source, source_id)` + `ON CONFLICT DO UPDATE`), no solo en el código. Dos tools nuevas, ambas `hitlLevel: 'auto'` (BLUEPRINT §9.1 ya lista "indexar docs" como ejemplo de ese nivel): `indexEmailToCorpus`, `searchCorpus`. Gauge `rag_hit_ratio` nuevo (`hit` = ≥1 resultado devuelto, no un umbral de distancia arbitrario — ver ADR).
+
+**Hallazgo real corregido de paso:** `test/support/postgres-testcontainer.ts` (compartido por *todos* los integration tests del repo) pinneaba `postgres:16.14-alpine` — sin el binario de la extensión `vector` — con el comentario explícito "No usa pgvector aquí". Cualquier test de esta fase habría fallado al crear la extensión; actualizado al mismo `pgvector/pgvector:0.8.5-pg16` que ya usa producción/dev, sin romper ningún test existente.
+
+**Migración `0009_corpus_pgvector` escrita a mano** (mismo motivo que la 0008 de Fase 9.5 — la cadena de snapshots de `drizzle-kit` sigue rota desde la 0003, deuda ya documentada, fuera de alcance de este PR). Numerada `0009` a propósito, no `0008`, para no colisionar con la migración de Fase 9.5 (PR #32) reservada en paralelo contra la misma base rota — coordinación explícita en la SQL, el ADR y aquí: si el orden de merge se invierte, quien mergee segundo renumera.
+
+**CI encontró un bug real de aislamiento en los propios tests, corregido antes de dar la fase por cerrada:** los contadores de `rag_hit_ratio` (`searchHits`/`searchTotal`) son estado de instancia de `CorpusService`, y el archivo de integración reutilizaba una única instancia (`beforeAll`) entre todos los `it()` — los tests que afirmaban un ratio absoluto (0, 0.5, 1) heredaban hits de tests previos del mismo archivo (CI real: esperaba `0`, recibió `0.75`). Fix: los dos tests de `rag_hit_ratio` ahora arman su propia instancia aislada de `CorpusService` en vez de reusar la compartida. Verificado con CI verde tras el fix.
+
+Verificado: 389/389 tests unitarios, build y lint limpios localmente; `test:integration` (79 tests, Postgres real vía testcontainers) verde en CI tras el fix de aislamiento — no ejecutable localmente en este entorno (sin Docker).
+
 ### Antigravity
 
 - **Repo:** `Jin_CLI`
@@ -260,7 +274,7 @@ Los `"name": "temp-*"` de `package.json` en Web y CLI ya no aplican como pendien
 24. **Fase 7.3** [Claude Code] — ✅ código completo (4 PRs + 1 commit directo a Jin_Docs). Hardening: auditoría de seguridad completa, chaos tests, MCP servers, runbooks pendientes. Ver sección dedicada abajo.
 25. **Fase 9.1** [Antigravity] — Notion + comando `/audio` (transcripción).
 26. **Fase 9.2** [Claude Code] — GitHub App + capacidad git real (desbloquea `mergeAgentBranch`, hoy 501).
-27. **Fase 9.3** [Claude Code] — RAG de corpus propio en pgvector (correos/PDFs/notas — la otra mitad de BLUEPRINT §3.3.1).
+27. **Fase 9.3** [Claude Code] — ✅ código en PR, CI verde, pendiente merge. RAG de corpus propio en pgvector: [Jin_Core #33](https://github.com/JFrnck/Jin_Core/pull/33). Ver sección dedicada arriba.
 28. **Fase 9.4** [Antigravity] — Alerta matutina 06:00 con resumen de prioridades.
 29. **Fase 9.5** [Claude Code] — Feature flags en caliente (ConfigMap + SIGHUP).
 30. **Fase 9.6** [Antigravity] — Comandos de administración en la CLI + menús navegables.
@@ -377,7 +391,7 @@ El owner preguntó si las fases pendientes cubrían todas las funciones que Jin 
 | Notion (integración completa) | §1.1, §7.4, §8.2, §9.1 | Cero código. Es un objetivo declarado del proyecto. | **Fase 9.1** |
 | Comando `/audio` (transcribe → Notion) | §8.2 | No está entre los 10 comandos reales del bot | **Fase 9.1** |
 | GitHub App + tools git | §7.3, §9.1 | Cero código en Core y Executor. `mergeAgentBranch` lanza 501 con el comentario "no existe hoy ninguna tool que le dé a un sub-agente la capacidad de producir una branch real" | **Fase 9.2** |
-| RAG de corpus propio (pgvector) | §3.3, §3.3.1, §6.4 | Solo existe la mitad `sqlite-vec` (memoria, Fase 4.3). pgvector está en la imagen pero ningún módulo lo usa. | **Fase 9.3** |
+| RAG de corpus propio (pgvector) | §3.3, §3.3.1, §6.4 | ✅ resuelto — [Jin_Core #33](https://github.com/JFrnck/Jin_Core/pull/33), ver sección Fase 9.3. | **Fase 9.3** |
 | Alerta matutina 06:00 | §7.1 | El cron 00:00 (Shadowing) sí existe; el de 06:00 no, ni nada que arme "resumen de prioridades" | **Fase 9.4** |
 | Infisical SDK en runtime | §11 | Manifest desplegado (Fase 1.1) pero **cero SDK en el código**: hoy todo es env plano, exactamente lo que §11 prohíbe | **Fase 8.1** (antes de 7.2) |
 | Golden set prompt injection (~50) | §13.1 **obligatorio** | Cero. `injection-sanitizer.spec.ts` cubre la unidad, no un corpus adversarial | **Fase 8.2** (antes de 7.3) |
