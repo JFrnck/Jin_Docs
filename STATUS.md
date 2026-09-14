@@ -70,7 +70,9 @@ El golden set de prompt injection de Fase 8.2 se cita como evidencia ya cerrada 
 
 **Parte B — MCP servers para documentación externa: código listo, PR abierto.** [Jin_Core #31](https://github.com/JFrnck/Jin_Core/pull/31) + [ADR 0008](docs/adr/0008-mcp-servers.md). Una sola tool estática (`queryExternalDocs`, `hitlLevel: 'auto'`) en vez de registrar dinámicamente las tools que un servidor MCP liste — descartado por capability injection (un servidor comprometido podría exponer una operación mutante bajo un nombre inocente, y el agente la ejecutaría sin revisión humana, violando AGENTS.md 5.4). El wrapping de contenido externo se heredó gratis del pipeline existente (`AgentService.handleRealToolCall`), sin tocar `agent.service.ts`. Limitación honesta documentada en el ADR: el parsing del formato de Context7 no se verificó contra el servidor real (sin acceso de red en este entorno) — recomendación de validarlo antes de dar la integración por cerrada en producción. 402/402 tests de Jin_Core, build y lint limpios.
 
-**Partes C (chaos tests) y D (runbooks pendientes) siguen en esta misma sesión.**
+**Parte C — chaos tests: código listo, PR abierto.** [Jin_Infra #14](https://github.com/JFrnck/Jin_Infra/pull/14): los 3 que pide BLUEPRINT §13.2 (`scripts/chaos/`) — matar `jin-core` a mitad de un dual-confirm, tirar Postgres, simular runaway insertando consumo directo en `budget_hourly_usage` (evita quemar tokens reales). **Limitación real, no resuelta por código:** ninguno se ejecutó contra un clúster real todavía — no hay uno (deploy pospuesto). Completos y con `shellcheck -x` limpio (nuevo step de CI), documentados en `scripts/chaos/README.md` con qué esperar de cada uno cuando se corran.
+
+**Parte D (runbooks pendientes) sigue en esta misma sesión.**
 
 ### Antigravity
 
