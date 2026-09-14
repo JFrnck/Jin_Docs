@@ -52,6 +52,24 @@ No se prueba que un LLM real "se porte bien" (no es determinístico) — se prue
 
 Verificado: 504/504 tests de Jin_Core (393 preexistentes + 115 nuevos, con overlap menor en el conteo agregado), build y lint limpios.
 
+## Fase 7.3 — Hardening final (2026-09-13, en curso — 4 partes secuenciales A/B/C/D)
+
+`PROMPTS.md` §7.3 agrupa auditoría + MCP + chaos tests + runbooks en un solo prompt, pero son 4 entregables independientes con repos distintos — se ejecutan como 4 PRs secuenciales, mismo patrón que 8.1/8.2.
+
+**Parte A — Informe de auditoría de seguridad: código listo, PRs abiertos.** [`Jin_Docs/docs/security-audit-fase7.md`](docs/security-audit-fase7.md) (este mismo commit) + [Jin_Infra #13](https://github.com/JFrnck/Jin_Infra/pull/13). Las 12 reglas de oro de `BLUEPRINT.md` §15 verificadas contra el código real, con evidencia (archivo:línea o test), no de memoria. **Sin hallazgos críticos abiertos.** 3 hallazgos reales, todos corregidos:
+
+1. **RBAC del Executor sin `pods/log`** (bug real, no solo de redacción): `K8sService.getPodLogs()` habría fallado con 403 en un clúster real al final de cada `runCode` — nada lo detectaba porque los integration tests de K3s usan un kubeconfig sin restringir. Fix: [Jin_Infra #13](https://github.com/JFrnck/Jin_Infra/pull/13).
+2. **`AGENTS.md` §5.5 no aclaraba dónde vive `egressWhitelist`** (imprecisión de redacción, el código ya era correcto): vive en el registry de `Jin_Executor`, no en el de `Jin_Core`. Corregido en `AGENTS.md`.
+3. **`STATUS.md` tenía 2 checkboxes desactualizados** (puntos 15 y 25 de `RECOMENDACIONES.md`, "Bloqueados/esperando" arriba): ambos ya resueltos desde [Jin_Infra PR #8](https://github.com/JFrnck/Jin_Infra/pull/8) (2026-08-05) pero seguían marcados `[ ]`. Corregidos a `[x]` con cita real.
+
+**Recomendación abierta, no implementada** (requiere decisión del owner + dual-confirm en producción, AGENTS.md 5.4): subir `sendEmail` a `hitlLevel: 'dual-confirm'` — es irreversible y actúa con la identidad del owner ante un tercero, el caso que la regla #7 anticipa explícitamente. `mergeAgentBranch` queda para reevaluar cuando Fase 9.2 la implemente de verdad (hoy es un 501 sin riesgo activo).
+
+El golden set de prompt injection de Fase 8.2 se cita como evidencia ya cerrada de "intentos activos de prompt injection contra el agent loop" — no se reconstruyó nada nuevo para esta parte.
+
+**Cierre honesto, sin inflar el resultado:** el criterio final del BLUEPRINT ("7 días autónomo") no se puede marcar cumplido hoy — se valida en operación real, pospuesta hasta el final del roadmap. Lo que certifica este informe es que el sistema está instrumentado y listo para esa validación.
+
+**Partes B (MCP servers), C (chaos tests) y D (runbooks pendientes) siguen en esta misma sesión.**
+
 ### Antigravity
 
 - **Repo:** `Jin_CLI`
@@ -233,7 +251,7 @@ Los `"name": "temp-*"` de `package.json` en Web y CLI ya no aplican como pendien
 21. **Fase 8.1** [Claude Code] — ✅ código en PR, pendiente merge y ejecución del paso manual. Infisical SDK en runtime: [Jin_Core #29](https://github.com/JFrnck/Jin_Core/pull/29), [Jin_Executor #11](https://github.com/JFrnck/Jin_Executor/pull/11), [Jin_Infra #12](https://github.com/JFrnck/Jin_Infra/pull/12). Ver sección dedicada abajo.
 22. **Fase 7.2** [Claude Code] — Runbook de activación real (secretos reales, OAuth consent, webhook Telegram, smoke test E2E).
 23. **Fase 8.2** [Claude Code] — ✅ código en PR, pendiente merge. Golden set de prompt injection: [Jin_Core #30](https://github.com/JFrnck/Jin_Core/pull/30). Ver sección dedicada abajo.
-24. **Fase 7.3** [Claude Code] — Hardening: auditoría de seguridad completa, chaos tests, MCP servers.
+24. **Fase 7.3** [Claude Code] — Hardening: auditoría de seguridad completa, chaos tests, MCP servers. **En curso, ejecutada como 4 PRs secuenciales (A/B/C/D) — Parte A (auditoría) en PR.** Ver sección dedicada abajo.
 25. **Fase 9.1** [Antigravity] — Notion + comando `/audio` (transcripción).
 26. **Fase 9.2** [Claude Code] — GitHub App + capacidad git real (desbloquea `mergeAgentBranch`, hoy 501).
 27. **Fase 9.3** [Claude Code] — RAG de corpus propio en pgvector (correos/PDFs/notas — la otra mitad de BLUEPRINT §3.3.1).
@@ -263,8 +281,8 @@ El owner pidió corregir los 18 puntos de la Ronda 2 de `docs/RECOMENDACIONES.md
 - [ ] 14 — `jin login` deja de tomar la contraseña como argumento posicional (prompt enmascarado).
 - [ ] 16 (mitad CLI) — manejo de `disconnect` del WS + reconexión en `ws-chat.ts`.
 - [ ] 20 (mitad CLI) — sacar `|| true` de `pnpm run test`/`generate:api` en el CI de Jin_CLI, agregar `lint`.
-- [ ] 15 — Jin_Infra: `verify-restore.sh` extendido a Redis y `memory.db`, no solo Postgres.
-- [ ] 25 — Jin_Infra: pinnear checksum/firma de los instaladores de K3s/Flux en bootstrap.
+- [x] 15 — Jin_Infra: `verify-restore.sh` extendido a Redis y `memory.db`, no solo Postgres. **Ya resuelto** — [Jin_Infra PR #8](https://github.com/JFrnck/Jin_Infra/pull/8) (mergeado 2026-08-05), verificado en la auditoría de Fase 7.3: cubre Postgres + Redis (`redis-check-rdb` + `redis-server` efímero real, `PING`/`DBSIZE`) + `memory.db` (`PRAGMA integrity_check`, conteo de tablas y de filas en `vec0`). Checkbox desactualizado hasta ahora — el código ya estaba en `main`.
+- [x] 25 — Jin_Infra: pinnear checksum/firma de los instaladores de K3s/Flux en bootstrap. **Ya resuelto** — mismo PR #8 (K3s) + commit `5007070` (Flux, gate manual con checksum). Checkbox desactualizado hasta ahora.
 
 **[Claude Code, cuando exista quien lo priorice] — deuda de fondo, no bloqueante:**
 - [ ] 21 — specs faltantes en `chain-verification.service.ts`, `ws-token.ts`, gateways WS, `env.schema.ts`.

@@ -236,6 +236,7 @@ El system prompt de cada agente debe incluir literalmente:
 
 - Los pods efímeros no tienen internet abierto. Cada tool declara los dominios a los que necesita salir en `egressWhitelist`.
 - El Executor aplica NetworkPolicies con esa whitelist al crear el pod.
+- **`egressWhitelist` vive en el registry propio de `Jin_Executor` (`src/rbac/tool-whitelist.ts`), no en el de `Jin_Core`** (`src/tools/registry.ts`, que solo declara `hitlLevel`) — son registries independientes, AGENTS.md 4.5. Aclarado en la auditoría de Fase 7.3: no era un bug, solo una imprecisión de redacción de este punto.
 
 ### 5.6 Audit log
 
