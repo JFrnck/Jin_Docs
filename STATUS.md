@@ -72,7 +72,9 @@ El golden set de prompt injection de Fase 8.2 se cita como evidencia ya cerrada 
 
 **Parte C — chaos tests: código listo, PR abierto.** [Jin_Infra #14](https://github.com/JFrnck/Jin_Infra/pull/14): los 3 que pide BLUEPRINT §13.2 (`scripts/chaos/`) — matar `jin-core` a mitad de un dual-confirm, tirar Postgres, simular runaway insertando consumo directo en `budget_hourly_usage` (evita quemar tokens reales). **Limitación real, no resuelta por código:** ninguno se ejecutó contra un clúster real todavía — no hay uno (deploy pospuesto). Completos y con `shellcheck -x` limpio (nuevo step de CI), documentados en `scripts/chaos/README.md` con qué esperar de cada uno cuando se corran.
 
-**Parte D (runbooks pendientes) sigue en esta misma sesión.**
+**Parte D — runbooks operativos pendientes: hecho, en este mismo commit.** `AGENTS.md` línea 394 los lista con nombre; solo existía `oci-deploy-prep.md`. Los 4 que faltaban, ahora en `docs/runbooks/`: `rotate-secrets.md` (las 15 claves de Infisical + las 2 identidades de máquina + los secretos de bootstrap que siguen en K8s), `restore-from-backup.md` (restore real, no solo verificación — a diferencia de `scripts/backup/verify-restore.sh`, que nunca toca datos de producción), `scale-modal-manually.md` (diagnóstico + limpiar el caché de `App`/`Image` de `ModalService` vía restart, cuota de Modal, por qué los hard caps de timeout/memoria requieren PR y no son un flag de runtime), `rebuild-vm-from-scratch.md` (combina `oci-deploy-prep.md` + `restore-from-backup.md`, y documenta qué NO se recupera solo con IaC+backups: las identidades de máquina de Infisical hay que recrearlas).
+
+**Fase 7.3 completa — las 4 partes (A/B/C/D) en PR o mergeadas a `main` de Jin_Docs.** PRs abiertos pendientes de revisión del owner: [Jin_Core #29](https://github.com/JFrnck/Jin_Core/pull/29)/[#30](https://github.com/JFrnck/Jin_Core/pull/30)/[#31](https://github.com/JFrnck/Jin_Core/pull/31), [Jin_Executor #10](https://github.com/JFrnck/Jin_Executor/pull/10)/[#11](https://github.com/JFrnck/Jin_Executor/pull/11), [Jin_Infra #11](https://github.com/JFrnck/Jin_Infra/pull/11)/[#12](https://github.com/JFrnck/Jin_Infra/pull/12)/[#13](https://github.com/JFrnck/Jin_Infra/pull/13)/[#14](https://github.com/JFrnck/Jin_Infra/pull/14).
 
 ### Antigravity
 
@@ -255,7 +257,7 @@ Los `"name": "temp-*"` de `package.json` en Web y CLI ya no aplican como pendien
 21. **Fase 8.1** [Claude Code] — ✅ código en PR, pendiente merge y ejecución del paso manual. Infisical SDK en runtime: [Jin_Core #29](https://github.com/JFrnck/Jin_Core/pull/29), [Jin_Executor #11](https://github.com/JFrnck/Jin_Executor/pull/11), [Jin_Infra #12](https://github.com/JFrnck/Jin_Infra/pull/12). Ver sección dedicada abajo.
 22. **Fase 7.2** [Claude Code] — Runbook de activación real (secretos reales, OAuth consent, webhook Telegram, smoke test E2E).
 23. **Fase 8.2** [Claude Code] — ✅ código en PR, pendiente merge. Golden set de prompt injection: [Jin_Core #30](https://github.com/JFrnck/Jin_Core/pull/30). Ver sección dedicada abajo.
-24. **Fase 7.3** [Claude Code] — Hardening: auditoría de seguridad completa, chaos tests, MCP servers. **En curso, ejecutada como 4 PRs secuenciales (A/B/C/D) — Parte A (auditoría) en PR.** Ver sección dedicada abajo.
+24. **Fase 7.3** [Claude Code] — ✅ código completo (4 PRs + 1 commit directo a Jin_Docs). Hardening: auditoría de seguridad completa, chaos tests, MCP servers, runbooks pendientes. Ver sección dedicada abajo.
 25. **Fase 9.1** [Antigravity] — Notion + comando `/audio` (transcripción).
 26. **Fase 9.2** [Claude Code] — GitHub App + capacidad git real (desbloquea `mergeAgentBranch`, hoy 501).
 27. **Fase 9.3** [Claude Code] — RAG de corpus propio en pgvector (correos/PDFs/notas — la otra mitad de BLUEPRINT §3.3.1).
@@ -263,7 +265,7 @@ Los `"name": "temp-*"` de `package.json` en Web y CLI ya no aplican como pendien
 29. **Fase 9.5** [Claude Code] — Feature flags en caliente (ConfigMap + SIGHUP).
 30. **Fase 9.6** [Antigravity] — Comandos de administración en la CLI + menús navegables.
 
-Dependencias: 5.1 → (5.2, 5.3, 5.4) → 5.5 (tras 5.2) → 6.1 → (6.2+6.3 en secuencia [Claude Code], 6.4 [Antigravity] en paralelo) → 7.1 (código, ✅ cerrado) → **8.1 (código en PR, pendiente merge) → 8.2 (código en PR, pendiente merge) → 7.3 → Fase 9 completa (9.1-9.6, cualquier orden interno) → ejecución real de 7.1 en la VM → 7.2**. **Fases 1-7.1(código) completas, 8.1 y 8.2 en PR. Decisión del owner 2026-08-07: el deploy real (ejecución en la VM + activación) se pospone hasta terminar el resto del roadmap completo, Fase 9 incluida — ver "Decisiones del owner". Siguiente en la cola tras mergear 8.1/8.2: 7.3 (hardening: auditoría de seguridad completa, chaos tests, MCP servers).**
+Dependencias: 5.1 → (5.2, 5.3, 5.4) → 5.5 (tras 5.2) → 6.1 → (6.2+6.3 en secuencia [Claude Code], 6.4 [Antigravity] en paralelo) → 7.1 (código, ✅ cerrado) → **8.1 (código en PR) → 8.2 (código en PR) → 7.3 (código completo, en PR) → Fase 9 completa (9.1-9.6, cualquier orden interno) → ejecución real de 7.1 en la VM → 7.2**. **Fases 1-7.3 código-completas, todas en PR pendiente de merge del owner (8.1/8.2/7.3). Decisión del owner 2026-08-07: el deploy real (ejecución en la VM + activación) se pospone hasta terminar el resto del roadmap completo, Fase 9 incluida — ver "Decisiones del owner". Siguiente en la cola tras mergear 8.1/8.2/7.3: Fase 9 (9.1-9.6, cualquier orden interno — 9.1/9.4/9.6 son de Antigravity, 9.2/9.3/9.5 de Claude Code).**
 
 **Nota de numeración:** el número es una etiqueta, no un orden de ejecución — 8.1 corre antes que 7.2 a propósito (ver auditoría). Ya hay precedente en este roadmap: la Fase 3.1 se ejecutó antes que la 2.4.
 
