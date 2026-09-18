@@ -75,13 +75,13 @@ Cuatro capas, comunicándose siempre en la dirección declarada:
 
 #### 3.1.1 Presupuesto de recursos (obligatorio)
 
-Total disponible tras reservar SO/K3s: **10 GB RAM, 1.5 vCPU**.
+Total disponible tras reservar SO/K3s: **~10.5 GB RAM, 1.75 vCPU** — reserva explícita en el kubelet (`system-reserved=cpu=250m,memory=768Mi` + `eviction-hard=memory.available<300Mi`, `Jin_Infra/scripts/bootstrap/01-install-k3s.sh`), no implícita.
 
 | Componente              | Requests (RAM) | Limits (RAM)   | Requests (CPU) | Limits (CPU)    |
 | ----------------------- | -------------- | -------------- | -------------- | --------------- |
 | Postgres (con pgvector) | 1.5 Gi         | 3 Gi           | 250m           | 1000m           |
 | Redis                   | 256 Mi         | 512 Mi         | 50m            | 250m            |
-| Infisical               | 192 Mi         | 384 Mi         | 50m            | 200m            |
+| Infisical               | 256 Mi         | 768 Mi         | 50m            | 200m            |
 | jin-core (1 réplica) | 512 Mi         | 1 Gi           | 150m           | 600m            |
 | jin-executor         | 192 Mi         | 384 Mi         | 50m            | 300m            |
 | Traefik                 | 64 Mi          | 128 Mi         | 50m            | 150m            |
@@ -92,9 +92,11 @@ Total disponible tras reservar SO/K3s: **10 GB RAM, 1.5 vCPU**.
 | promtail (DaemonSet)    | 64 Mi          | 128 Mi         | 25m            | 100m            |
 | cert-manager (3 pods)   | 192 Mi         | 384 Mi         | 75m            | 300m            |
 | Flux (4 controllers)    | 256 Mi         | 512 Mi         | 100m           | 400m            |
-| **agents-sandbox pool** | —              | **2 Gi techo** | —              | **1000m techo** |
+| **agents-sandbox pool** | —              | **2 Gi techo** | 250m/pod       | **1000m techo, máx. 3 pods** |
 
-Suma: **~3.9 Gi de requests** y **~9.5 Gi de limits** (pool de sandbox incluido) sobre los 10 Gi disponibles. Los ~0.5 Gi restantes absorben los CronJobs de backup (§3.5), que corren de noche y no están en la tabla porque son efímeros.
+Suma: **~4 Gi de requests** y **~9.9 Gi de limits** (pool de sandbox incluido) sobre los ~10.5 Gi asignables. Los ~0.6 Gi restantes absorben los CronJobs de backup (§3.5), que corren de noche y no están en la tabla porque son efímeros.
+
+**La CPU es el recurso ajustado, no la RAM.** El scheduler reparte por *requests*: tras los ~975m fijos (workloads de `Jin_Infra` + Traefik + coredns + metrics-server de K3s; cert-manager y Flux no declaran requests upstream) quedan ~775m de los 1750m asignables — caben **3 pods de sandbox** a 250m cada uno, de ahí `pods: "3"` en la ResourceQuota. Infisical sube a 256/768 Mi porque es dependencia de arranque de jin-core y executor (Fase 8.1): un OOMKill suyo los tumba en cascada.
 
 **cert-manager y Flux no se instalan desde `Jin_Infra`** (manifest oficial pinneado y `flux bootstrap` respectivamente), así que sus valores en esta tabla son una **reserva contable**, no `resources` que este repo declare: cert-manager son 3 Deployments (controller, webhook, cainjector) y Flux 4 controllers, todos sin `resources` en sus manifests upstream. Si el nodo queda ajustado, ese es el primer lugar donde mirar.
 
