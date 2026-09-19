@@ -6,7 +6,7 @@
 
 **Decisión del owner:** retomó el deploy en una VM nueva (`jin-assistant`, OCI Always Free, Ubuntu 24.04 aarch64, **2 OCPU / 12 GB / 200 GB**, Chile West) y autorizó explícitamente mergear PRs. Sustituye la pausa del 2026-08-08. Detalle completo y verificaciones en [`docs/runbooks/STATUS_DEPLOY.md`](docs/runbooks/STATUS_DEPLOY.md).
 
-**Mergeado a `main` (los 13 PRs abiertos de septiembre, con CI verde y conflictos resueltos):** Jin_Core #29/#30/#31/#32/#33 (Fases 8.1, 8.2, 7.3B, 9.5, 9.3), Jin_Executor #10/#11, Jin_Infra #11–#15, más los PRs de esta sesión (abajo). **Fases 8.1, 8.2, 7.3, 9.3 y 9.5 ya están en `main`.**
+**Mergeado a `main` (los 12 PRs de código abiertos de septiembre, con CI verde y conflictos resueltos):** Jin_Core #29/#30/#31/#32/#33 (Fases 8.1, 8.2, 7.3B, 9.5, 9.3), Jin_Executor #10/#11, Jin_Infra #11–#15, más los PRs de esta sesión (abajo). **Fases 8.1, 8.2, 7.3, 9.3 y 9.5 ya están en `main`.**
 
 **Bloqueantes de deploy encontrados y corregidos** (todos reproducidos, no supuestos; ver `STATUS_DEPLOY.md`):
 
