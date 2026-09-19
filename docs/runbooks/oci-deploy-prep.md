@@ -225,11 +225,19 @@ Verificá los recursos asignables: `kubectl get node -o jsonpath='{.items[0].sta
 **Este es el momento de volver a §3.2 y activar `ufw`** si todavía no lo hiciste — con el clúster ya arriba podés verificar que nada se rompió.
 
 ### 7.2 `02-seed-secrets.sh`
-Siembra todos los Secrets que necesitan existir antes de que el resto del clúster (incluido Infisical) esté operativo. Exportá **todas** las variables que pide (ver §6) antes de correrlo — el script mismo valida que no falte ninguna y aborta si algo falta, sin aplicar nada a medias.
+Siembra todos los Secrets que necesitan existir antes de que el resto del clúster (incluido Infisical) esté operativo. Pide 14 variables y aborta sin aplicar nada a medias si falta alguna.
+
+**7 de las 14 son internas** (contraseñas de Postgres/Redis/Grafana, claves de Infisical, par de claves `age`) y no salen de ninguna cuenta: las genera `00-generate-local-secrets.sh` sin imprimirlas. Las **otras 7** las pone el owner (Cloudflare API token y token del túnel, R2 ×3, GHCR ×2):
+
 ```bash
-export POSTGRES_PASSWORD=... REDIS_PASSWORD=... # etc — todas las de la cabecera del script
+sudo apt-get install -y age                      # una vez; el script necesita age-keygen
+bash scripts/bootstrap/00-generate-local-secrets.sh    # crea ~/.jin-secrets.env (0600), valores NO impresos
+nano ~/.jin-secrets.env                          # descomentá y completá las 7 externas
+set -a; source ~/.jin-secrets.env; set +a
 bash scripts/bootstrap/02-seed-secrets.sh
 ```
+
+⚠️ **Respaldá `~/.jin-secrets.env` fuera de la VM** (gestor de contraseñas), sobre todo `AGE_PRIVATE_KEY`: sin ella los backups en R2 no se pueden descifrar si la VM se pierde. El script se niega a sobrescribir un archivo existente por eso mismo. Los Secrets ya sembrados en K8s no dependen del archivo; una vez respaldado podés borrarlo de la VM (`shred -u ~/.jin-secrets.env`).
 
 ### 7.3 `03-verify-tunnel-dns.sh`
 No crea nada — verifica que el túnel de Cloudflare y el DNS wildcard (configurados a mano en §6) estén realmente funcionando.
