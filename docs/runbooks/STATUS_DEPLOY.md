@@ -6,7 +6,43 @@
 
 ## Estado actual (resumen rápido)
 
-> ## ⏸️ DEPLOY PAUSADO POR DECISIÓN DEL OWNER (2026-08-08)
+## ▶️ ESTADO AL 2026-09-19 — deploy REANUDADO en una VM nueva
+
+El owner retomó el deploy (ver la pausa del 2026-08-08 más abajo, ahora **histórica**) y autorizó ejecutar todo lo automatizable, incluido mergear PRs. La VM anterior (Ubuntu 22.04, 4 vCPU/24 GB) ya no es la de trabajo.
+
+**VM actual:** OCI Always Free, Chile West (Valparaíso), instancia `jin-assistant`, **Ubuntu 24.04 aarch64, 2 OCPU / 12 GB / 200 GB**, IP pública `148.116.111.240`, VCN `jin-vcn` (subred pública; solo el 22 abierto).
+
+### Los 4 bloqueantes de la bitácora del 2026-08-08 — todos resueltos
+
+| # | Bloqueante | Resolución |
+| --- | --- | --- |
+| 1 | `CMD` apunta a `dist/main` inexistente | Jin_Core #34 + Jin_Executor #12 (`dist/src/main`). Verificado ejecutando la imagen publicada. |
+| 2 | Sin migraciones | `drizzle/` en la imagen (Core #34); el migrador solo exige `DATABASE_URL` (Core #35, ver abajo); Job + `scripts/migrate-db.sh` (Infra #16). Probado con la imagen real contra pgvector: 10 migraciones, 14 tablas, idempotente. |
+| 3 | `cloudflared` duplicado en el host | La VM nueva no lo tiene instalado (verificado). |
+| 4 | Ubuntu 22.04 vs 24.04 | La VM nueva es 24.04.5. Desviación ya no aplica. |
+
+### Hallazgos nuevos de esta sesión (todos corregidos)
+
+- **Alpine (musl) no puede cargar `sqlite-vec`** (binarios glibc-only): `jin-core` moría al instanciar `MemoryStore`. Además `better-sqlite3` 13 exige glibc ≥ 2.38 (bookworm trae 2.36). → base `node:24.11.0-trixie-slim` (Core #34). *Esto no lo habría visto nadie mientras el `CMD` estuviera roto.*
+- **Los pods del sandbox eran rechazados** por Pod Security `restricted` (sin `seccompProfile`). Reproducido con K3s real; el harness de tests creaba el namespace sin las etiquetas PSA de producción, por eso pasaba (mismo patrón que `pods/log`). → Executor #12.
+- **Sin `.dockerignore`**: `COPY . .` metía `node_modules` de macOS, `.env` y `memory.db` al contexto de build. `nest build` agotaba el heap por defecto en contenedores de 4 GB. → Core #34 / Executor #12.
+- **`migrate.ts` exigía el `EnvSchema` completo**, pero desde la Fase 8.1 los secretos de API viven solo en Infisical: el Job habría fallado siempre. → Core #35.
+- **`POST /telegram/webhook` no estaba ruteado** (la IngressRoute solo cubría `/api`) y Telegram es el único canal de aprobación HITL. → Infra #16 (path exacto, no `/telegram/*`). ⚠️ Si `jin.jeanfranck.com` está detrás de Cloudflare Access, ese path necesita política *Bypass*.
+- **`04-apply-manifests.sh` abortaba siempre**: exigía `jin-core`/`executor` Ready, pero Infisical se configura *después* (§7.6). → Infra #16 (avisa sin abortar).
+- **El hash del instalador de K3s ya no coincidía.** No se actualizó a ciegas: el pin viejo era el `install.sh` del commit `2d0f82fa`; el único cambio posterior (`2977c525`) son 2 líneas de SELinux para Flatcar. → Infra #17.
+- **CI**: job `container-smoke` en Core y Executor (levanta la imagen y exige respuesta). Es el control que faltaba; el job `docker` ahora depende de él.
+
+### Estado de la VM
+- ✅ §3 hardening: sshd sin root ni contraseña (drop-in `00-jin-hardening.conf`), `fail2ban`, `rpcbind` enmascarado, `unattended-upgrades`, paquetes al día. Verificado con `nmap` desde fuera: **solo el 22**.
+- ✅ §7.1 K3s v1.36.2 `Ready`, allocatable **1750m / ~10.6 GiB** (exactamente el diseño con `system-reserved`).
+- ✅ §3.2 `ufw` activo. **Ver el runbook: hacen falta reglas específicas para K3s** (el runbook original decía que no interferiría; sin ellas se pierde el reenvío entre pods).
+- ✅ §7.8 `inotify` y pre-pull de Deno.
+- ⏳ **Pendiente del owner (requiere sus credenciales, no automatizable):** §6 (Cloudflare Tunnel/token/DNS, R2, PAT de GHCR), luego §7.2 `02-seed-secrets.sh`, §7.3, §7.5 `04-apply-manifests.sh`, §7.6 Infisical (manual), §7.7 Flux (gate deliberado).
+- Imágenes ya pinneadas en los manifests (Infra #18): `jin-core:b6d2b9b5…`, `jin-executor:3bba0b7f…` (ambas `linux/arm64` en GHCR).
+
+---
+
+> ### ⏸️ (HISTÓRICO) DEPLOY PAUSADO POR DECISIÓN DEL OWNER (2026-08-08)
 >
 > El owner decidió **pausar el deploy** y seguir trabajando en la app en local. Vuelve a esta VM *"cuando esté la app terminada y solo queden cosas por hacer en la VM"*. **No reanudar §7 automáticamente — esperar su instrucción explícita.**
 >

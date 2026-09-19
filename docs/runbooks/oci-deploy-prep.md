@@ -80,17 +80,37 @@ nmap -Pn -p 22,80,443,6443,10250 <ip-publica-de-la-vm>
 
 ### 3.2 Firewall del sistema operativo (`ufw`) — defensa en profundidad
 
-Redundante con 3.1 si ese quedó bien, pero un servidor de un solo usuario no pierde nada por tener las dos capas. Con clúster single-node (este caso), `ufw` no debería interferir con el networking interno de K3s (todo el tráfico pod-a-pod queda en interfaces internas del nodo, no en la NIC pública que `ufw` filtra) — aun así, verificá el clúster después de activarlo, no antes de tenerlo instalado.
+Redundante con 3.1 si ese quedó bien, pero un servidor de un solo usuario no pierde nada por tener las dos capas.
+
+**Corregido el 2026-09-19 (verificado en la VM real):** la versión anterior de este runbook decía que `ufw` "no debería interferir" con K3s. **Sí interfiere si se aplica solo el bloque mínimo**: `ufw` deja el reenvío (`FORWARD`) en `deny` y bloquea a los pods hablar con el host, así que los pods pierden DNS y salida a internet. Reglas necesarias además del 22:
 
 ```bash
+sudo apt-get install -y ufw
+# Red de seguridad: si algo sale mal, ufw se apaga solo en 4 minutos.
+sudo systemd-run --unit=ufw-rollback --on-active=240 /usr/sbin/ufw --force disable
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
 sudo ufw allow 22/tcp
-sudo ufw enable
-sudo ufw status verbose
+# K3s: pods (10.42/16) y services (10.43/16) hablan con el host (kubelet, API, coredns)
+sudo ufw allow from 10.42.0.0/16 to any
+sudo ufw allow from 10.43.0.0/16 to any
+# reenvío del bridge de pods (sin esto: sin DNS ni internet desde los pods)
+sudo ufw allow in on cni0
+sudo ufw route allow in on cni0
+sudo ufw route allow out on cni0
+sudo ufw --force enable
 ```
 
-**Corré esto recién después de instalar K3s (§7.1)**, y confirmá que `kubectl get nodes` y `kubectl get pods -A` siguen respondiendo bien tras activarlo — si algo se rompe, es más fácil diagnosticarlo con el clúster ya arriba que a ciegas.
+**Verificá desde una sesión SSH NUEVA antes de cancelar el rollback** (`sudo systemctl stop ufw-rollback.timer`):
+```bash
+kubectl get nodes && kubectl get pods -A
+kubectl run nettest --image=busybox:1.37 --restart=Never --command -- sh -c \
+  'nslookup kubernetes.default.svc.cluster.local && wget -q -T 10 --spider https://ghcr.io && echo OK'
+kubectl logs nettest; kubectl delete pod nettest
+```
+Y `nmap` desde afuera (ver 3.1): solo el 22 abierto — incluidos los NodePorts de Traefik (30000+), que existen aunque `servicelb` esté deshabilitado.
+
+**Corré esto recién después de instalar K3s (§7.1).** Las interfaces `cni0`/`flannel.1` no existen antes.
 
 ### 3.3 SSH — cerrar lo obvio
 
@@ -189,13 +209,19 @@ Instala K3s en la VM (con `servicelb` deshabilitado — la única entrada al cl�
 sudo -E bash scripts/bootstrap/01-install-k3s.sh
 sudo k3s kubectl get nodes   # esperado: 1 nodo, estado Ready
 ```
-Después de este paso, configurá `kubectl` para el resto de la sesión:
+> **Nota (2026-09-19):** en el primer arranque el `kubectl wait` del script puede correr antes de que el nodo se registre y dar `error: no matching resources found`. Es una carrera del script, no un fallo de K3s: K3s ya quedó instalado. Comprobá con `sudo k3s kubectl get nodes` (esperá ~30 s) en vez de re-instalar.
+>
+> Si el script falla con `install.sh: FAILED` (checksum), **no actualices el hash a ciegas**: seguí el procedimiento del comentario al inicio de `01-install-k3s.sh` (revisar el diff upstream commit por commit).
+
+Después de este paso, configurá `kubectl` para el resto de la sesión. **El `kubectl` de K3s ignora `~/.kube/config` salvo que `KUBECONFIG` esté definido** (por defecto lee `/etc/rancher/k3s/k3s.yaml`, que es de root):
 ```bash
 mkdir -p ~/.kube
 sudo k3s kubectl config view --raw > ~/.kube/config
 chmod 600 ~/.kube/config
+echo 'export KUBECONFIG=$HOME/.kube/config' >> ~/.bashrc && export KUBECONFIG=$HOME/.kube/config
 kubectl get nodes
 ```
+Verificá los recursos asignables: `kubectl get node -o jsonpath='{.items[0].status.allocatable}'` debe dar ~`1750m` de CPU y ~10.6 GiB (efecto de `system-reserved`).
 **Este es el momento de volver a §3.2 y activar `ufw`** si todavía no lo hiciste — con el clúster ya arriba podés verificar que nada se rompió.
 
 ### 7.2 `02-seed-secrets.sh`
@@ -212,28 +238,25 @@ bash scripts/bootstrap/03-verify-tunnel-dns.sh
 ```
 Si falla, el problema está en la configuración del dashboard de Cloudflare, no en la VM — volvé a §6.
 
-### 7.4 Actualizar los tags de imagen placeholder
+### 7.4 Tags de imagen — ya pinneados (2026-09-19)
 
-Antes de aplicar los manifests: `k8s/base/jin-core/deployment.yaml` y `k8s/base/executor/deployment.yaml` tienen la imagen fijada a `PLACEHOLDER_UPDATE_BEFORE_DEPLOY` (buscá ese string exacto). Reemplazalo por el tag real — el SHA del commit de `main` que publicó cada CI:
+Ya no hay placeholders: los `deployment.yaml` de `jin-core` y `executor` apuntan a SHAs reales publicados por el CI (Infra #18: `jin-core:b6d2b9b5…`, `jin-executor:3bba0b7f…`, ambas `linux/arm64`, verificadas ejecutándolas). **Este paso se salta en el primer deploy.**
 
-```bash
-# Encontrar el SHA real publicado (mismo SHA que el HEAD de main en cada repo tras el merge)
-git ls-remote https://github.com/JFrnck/Jin_Core.git HEAD
-git ls-remote https://github.com/JFrnck/Jin_Executor.git HEAD
-
-# Confirmar que la imagen con ese tag existe de verdad en GHCR antes de referenciarla
-gh api /orgs/JFrnck/packages/container/jin-core/versions 2>/dev/null | grep -A2 "<sha-de-arriba>" \
-  || gh api /users/JFrnck/packages/container/jin-core/versions 2>/dev/null | grep -A2 "<sha-de-arriba>"
-```
-
-Editá los dos `deployment.yaml`, commiteá y **pusheá a una rama, no directo a `main`** (mismo flujo de PR que el resto del proyecto — dejale el merge al owner, aunque sea un cambio de una línea).
+Para un release posterior, el procedimiento es: merge en `main` de la app → esperar a que el job `docker` del CI publique → confirmar que existe la imagen (`docker manifest inspect ghcr.io/jfrnck/<imagen>:<sha>`) → PR a Jin_Infra cambiando el tag. El job `container-smoke` del CI garantiza que la imagen arranca antes de publicarse.
 
 ### 7.5 `04-apply-manifests.sh`
 Instala cert-manager y aplica el overlay completo de producción (incluye ahora `jin-core` y `executor`).
 ```bash
 bash scripts/bootstrap/04-apply-manifests.sh
 ```
-Este script ya espera (`rollout status`) a que todos los Deployments/StatefulSets queden listos, incluidos `jin-core` y `executor` — si se cuelga en alguno, el problema está ahí, no sigas.
+El script: instala cert-manager, aplica el overlay, espera a Postgres/Redis, **aplica las migraciones de DB** (`scripts/migrate-db.sh`, un Job con la imagen del Deployment `jin-core`; idempotente) y espera al resto de la infraestructura.
+
+`jin-core` y `executor` **no van a llegar a `Ready` todavía**: cargan sus secretos de Infisical al arrancar y `INFISICAL_PROJECT_ID` es un placeholder hasta §7.6. El script lo avisa sin abortar; se verifica en §8. Si se cuelga en Postgres, Redis, Infisical, cloudflared o la observabilidad, el problema está ahí — no sigas.
+
+Verificá el schema de verdad (`/health/ready` solo hace `select 1` y da 200 con la base vacía):
+```bash
+kubectl -n jin exec sts/postgres -- psql -U jin -d jin -Atc "select count(*) from information_schema.tables where table_schema='public'"   # esperado: 14
+```
 
 ### 7.6 `08-seed-infisical-app-secrets.sh` (Fase 8.1)
 
