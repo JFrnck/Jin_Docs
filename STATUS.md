@@ -1,6 +1,44 @@
 # STATUS
 
-## Última actualización: 2026-08-07 (America/Lima) — actualización 25
+## Última actualización: 2026-09-19 (America/Lima) — actualización 26
+
+## Sesión 2026-09-19 — deploy reanudado: código en `main`, VM lista hasta el gate de secretos
+
+**Decisión del owner:** retomó el deploy en una VM nueva (`jin-assistant`, OCI Always Free, Ubuntu 24.04 aarch64, **2 OCPU / 12 GB / 200 GB**, Chile West) y autorizó explícitamente mergear PRs. Sustituye la pausa del 2026-08-08. Detalle completo y verificaciones en [`docs/runbooks/STATUS_DEPLOY.md`](docs/runbooks/STATUS_DEPLOY.md).
+
+**Mergeado a `main` (los 13 PRs abiertos de septiembre, con CI verde y conflictos resueltos):** Jin_Core #29/#30/#31/#32/#33 (Fases 8.1, 8.2, 7.3B, 9.5, 9.3), Jin_Executor #10/#11, Jin_Infra #11–#15, más los PRs de esta sesión (abajo). **Fases 8.1, 8.2, 7.3, 9.3 y 9.5 ya están en `main`.**
+
+**Bloqueantes de deploy encontrados y corregidos** (todos reproducidos, no supuestos; ver `STATUS_DEPLOY.md`):
+
+| Hallazgo | PR |
+| --- | --- |
+| `CMD` apuntaba a `dist/main` (real: `dist/src/main`); `config/` y `drizzle/` no llegaban a la imagen; sin `.dockerignore`; `nest build` agotaba el heap | Core #34, Executor #12 |
+| Base Alpine (musl) no puede cargar `sqlite-vec`; `better-sqlite3` 13 exige glibc ≥ 2.38 → `node:24.11.0-trixie-slim` | Core #34 |
+| Pods del sandbox rechazados por Pod Security `restricted` (sin `seccompProfile`); el harness de K3s era más permisivo que producción | Executor #12 |
+| El migrador exigía el entorno completo, imposible desde la Fase 8.1 (secretos solo en Infisical) | Core #35 |
+| Sin migraciones en el clúster; sin ruta para `POST /telegram/webhook`; `04-apply-manifests.sh` abortaba siempre | Infra #16 |
+| `TELEGRAM_WEBHOOK_URL` ausente del Deployment (el bot nunca registraba el webhook) | Infra #19 |
+| Hash del instalador de K3s desactualizado (verificado commit a commit, no actualizado a ciegas) | Infra #17 |
+| Tags de imagen → SHAs reales (`jin-core:b6d2b9b5`, `jin-executor:3bba0b7f`, ambos `linux/arm64`) | Infra #18 |
+| **CI**: job `container-smoke` en Core y Executor (levanta la imagen; el job `docker` depende de él) | Core #34, Executor #12 |
+
+**Estado de la VM:** hardening completo (sshd, fail2ban, `ufw` con reglas K3s verificadas, `nmap` externo: solo el 22), K3s v1.36.2 `Ready` con allocatable 1750m / ~10.6 GiB, `inotify` y pre-pull de Deno. **Nada de la app corre aún** — falta el gate humano.
+
+### 🔴 Pendiente del owner (requiere sus credenciales; no automatizable)
+1. `oci-deploy-prep.md` §6: Cloudflare (Tunnel + token, API token DNS, CNAME wildcard), R2 (bucket + API token), PAT `read:packages` de GHCR, PAT `repo` para Flux.
+2. §7.2 `02-seed-secrets.sh` → §7.3 → §7.5 `04-apply-manifests.sh` (ya aplica las migraciones) → §7.6 Infisical (manual) → §7.7 Flux (gate deliberado).
+3. Activación: [`docs/runbooks/activation.md`](docs/runbooks/activation.md) (nuevo, Fase 7.2).
+
+### 🟡 Abierto, requiere revisión del owner (no se envió en automático a propósito)
+- **Doble ejecución de una aprobación** (`Jin_Core/src/hitl/approval-execution.service.ts`): lee el pendiente → `recordApproval` → ejecuta → audita → borra, sin reclamo atómico. Dos aprobaciones casi simultáneas (Web + Telegram, doble clic) pueden ejecutar `sendEmail` dos veces; si falla el audit/borrado tras ejecutar, el pendiente sigue vivo. Es lógica de HITL (`CLAUDE.md`: planning mode + revisión línea por línea), así que se deja como issue, no como PR.
+- Preguntas de diseño de la Fase 9.5: cada SIGHUP con un override que baja el nivel crea una aprobación dual-confirm nueva sin deduplicar; el override solo se aplica en `AgentService` (no en `orchestrator.service.ts` ni en los `Google*ToolsService`).
+
+### Roadmap restante
+9.1 (Notion + `/audio`), 9.4 (alerta 06:00) y 9.6 (CLI admin) son de Antigravity; 9.2 (GitHub App + git real, desbloquea `mergeAgentBranch`) es de Claude Code y requiere que el owner cree la GitHub App.
+
+---
+
+## Actualización 25 (2026-08-07)
 
 > **Antigravity ya está activo** (ver abajo, Fase 3.1/2.4/4.2). Retoma ownership normal de `docs/WORKFLOW.md` sección 2 — Claude Code ya no asume tareas `[ANTIGRAVITY]` por defecto, salvo negociación puntual vía esta misma nota.
 
