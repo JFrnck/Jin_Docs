@@ -48,7 +48,7 @@ A diferencia de Jin_Core (que usa `config/*.yaml` para guardas operativas como `
 
 ### 11. RBAC ampliado (`services`, `ingressroutes.traefik.io`), `ResourceQuota`/`LimitRange` intactos
 
-Restricción explícita de PROMPTS.md §5.5: no ampliar los límites de recursos del namespace en este PR. Los pods de servicio compiten por el mismo presupuesto de recursos que los pods run-to-completion (request 256Mi/250m, limit 1Gi/1000m — dentro del máximo de 2Gi/1500m). Cambio de RBAC hecho por Claude Code en Jin_Infra pese a ser normalmente área de Antigravity — frontera de seguridad, mismo precedente que backups en Fase 1.2 (ver `PROMPTS.md` §5.5 y nota de coordinación en `STATUS.md`).
+Restricción explícita de PROMPTS.md §5.5: no ampliar los límites de recursos del namespace en este PR. Los pods de servicio compiten por el mismo presupuesto de recursos que los pods run-to-completion (request 256Mi/250m, limit 1Gi/1000m — en el máximo de 1Gi/1000m tras el redimensionamiento de la VM a 12 GB / 2 vCPU; ver la nota de `maxLimitRequestRatio` en BLUEPRINT 3.1.1 y AGENTS.md 4.4). Cambio de RBAC hecho por Claude Code en Jin_Infra pese a ser normalmente área de Antigravity — frontera de seguridad, mismo precedente que backups en Fase 1.2 (ver `PROMPTS.md` §5.5 y nota de coordinación en `STATUS.md`).
 
 ### 12. `ExecutorToolDefinition` como discriminated union
 

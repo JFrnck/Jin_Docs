@@ -69,29 +69,36 @@ Cuatro capas, comunicándose siempre en la dirección declarada:
 ### 3.1 VM principal
 
 - **Oracle Cloud Infrastructure Always Free**, instancia ARM Ampere.
-- Recursos: 4 vCPU · 24 GB RAM · 200 GB block storage.
+- Recursos: 2 vCPU · 12 GB RAM · 200 GB block storage.
 - OS: Ubuntu 24.04 LTS.
 - Región: la más cercana a tu ubicación actual con Always Free disponible.
 
 #### 3.1.1 Presupuesto de recursos (obligatorio)
 
-Total disponible tras reservar SO/K3s: **20 GB RAM, 3.5 vCPU**.
+Total disponible tras reservar SO/K3s: **~10.5 GB RAM, 1.75 vCPU** — reserva explícita en el kubelet (`system-reserved=cpu=250m,memory=768Mi` + `eviction-hard=memory.available<300Mi`, `Jin_Infra/scripts/bootstrap/01-install-k3s.sh`), no implícita.
 
 | Componente              | Requests (RAM) | Limits (RAM)   | Requests (CPU) | Limits (CPU)    |
 | ----------------------- | -------------- | -------------- | -------------- | --------------- |
-| Postgres (con pgvector) | 4 Gi           | 6 Gi           | 500m           | 1500m           |
-| Redis                   | 512 Mi         | 1 Gi           | 100m           | 500m            |
-| Infisical               | 256 Mi         | 512 Mi         | 50m            | 200m            |
-| jin-core (1 réplica) | 512 Mi         | 1 Gi           | 200m           | 800m            |
-| jin-executor         | 256 Mi         | 512 Mi         | 100m           | 400m            |
-| Traefik                 | 128 Mi         | 256 Mi         | 50m            | 200m            |
-| cloudflared             | 64 Mi          | 128 Mi         | 50m            | 100m            |
-| Prometheus              | 512 Mi         | 1 Gi           | 100m           | 300m            |
-| Loki                    | 256 Mi         | 512 Mi         | 100m           | 300m            |
-| Grafana                 | 256 Mi         | 512 Mi         | 50m            | 200m            |
-| cert-manager            | 64 Mi          | 128 Mi         | 50m            | 100m            |
-| Flux                    | 128 Mi         | 256 Mi         | 50m            | 200m            |
-| **agents-sandbox pool** | —              | **6 Gi techo** | —              | **1500m techo** |
+| Postgres (con pgvector) | 1.5 Gi         | 3 Gi           | 250m           | 1000m           |
+| Redis                   | 256 Mi         | 512 Mi         | 50m            | 250m            |
+| Infisical               | 256 Mi         | 768 Mi         | 50m            | 200m            |
+| jin-core (1 réplica) | 512 Mi         | 1 Gi           | 150m           | 600m            |
+| jin-executor         | 192 Mi         | 384 Mi         | 50m            | 300m            |
+| Traefik                 | 64 Mi          | 128 Mi         | 50m            | 150m            |
+| cloudflared             | 64 Mi          | 128 Mi         | 25m            | 100m            |
+| Prometheus              | 320 Mi         | 512 Mi         | 50m            | 250m            |
+| Loki                    | 160 Mi         | 256 Mi         | 50m            | 250m            |
+| Grafana                 | 160 Mi         | 256 Mi         | 25m            | 150m            |
+| promtail (DaemonSet)    | 64 Mi          | 128 Mi         | 25m            | 100m            |
+| cert-manager (3 pods)   | 192 Mi         | 384 Mi         | 75m            | 300m            |
+| Flux (4 controllers)    | 256 Mi         | 512 Mi         | 100m           | 400m            |
+| **agents-sandbox pool** | —              | **2 Gi techo** | 250m/pod       | **1000m techo, máx. 3 pods** |
+
+Suma: **~4 Gi de requests** y **~9.9 Gi de limits** (pool de sandbox incluido) sobre los ~10.5 Gi asignables. Los ~0.6 Gi restantes absorben los CronJobs de backup (§3.5), que corren de noche y no están en la tabla porque son efímeros.
+
+**La CPU es el recurso ajustado, no la RAM.** El scheduler reparte por *requests*: tras los ~975m fijos (workloads de `Jin_Infra` + Traefik + coredns + metrics-server de K3s; cert-manager y Flux no declaran requests upstream) quedan ~775m de los 1750m asignables — caben **3 pods de sandbox** a 250m cada uno, de ahí `pods: "3"` en la ResourceQuota. Infisical sube a 256/768 Mi porque es dependencia de arranque de jin-core y executor (Fase 8.1): un OOMKill suyo los tumba en cascada.
+
+**cert-manager y Flux no se instalan desde `Jin_Infra`** (manifest oficial pinneado y `flux bootstrap` respectivamente), así que sus valores en esta tabla son una **reserva contable**, no `resources` que este repo declare: cert-manager son 3 Deployments (controller, webhook, cainjector) y Flux 4 controllers, todos sin `resources` en sus manifests upstream. Si el nodo queda ajustado, ese es el primer lugar donde mirar.
 
 Los pods efímeros consumen del pool `agents-sandbox` mediante ResourceQuota a nivel de namespace, no requests individuales. **La quota es un techo de ráfaga, no una reserva: sin tareas corriendo, el consumo del namespace es cero** (no hay warm pool — ver 4.4).
 
@@ -514,6 +521,7 @@ Tres niveles de presupuesto, todos configurables en `config/budget.yaml`:
 - **Infisical** self-hosted como Deployment en K3s (open-source, panel usable, SDK Node).
 - Todos los secretos viven en Infisical: API keys, PATs, tokens OAuth, JWT signing key.
 - core y Executor los cargan al startup vía SDK; nunca están en env plain.
+- **Excepción explícita, Fase 8.1:** `DATABASE_URL`/`REDIS_URL` (con la password de Postgres/Redis embebida) siguen viniendo de un Secret de K8s sembrado por `02-seed-secrets.sh`, no de Infisical — mismo problema de huevo-gallina que las credenciales de bootstrap de Infisical (Postgres/Redis/Infisical arrancan juntos, antes de que Infisical tenga nada que servir). Las credenciales de la identidad de máquina (`INFISICAL_CLIENT_ID`/`SECRET`) de cada servicio son, por el mismo motivo, el único otro secreto fuera de Infisical.
 - **Master key de Infisical** cifrada con `age`, guardada en dos lugares:
   - Llavero local del owner (Bitwarden / 1Password).
   - Backup encriptado en R2 con llave separada.

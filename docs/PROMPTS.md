@@ -594,7 +594,7 @@ TU TAREA:
 - Jin_Executor: nueva capacidad `startService` / `stopService` — crea en `agents-sandbox` un pod de larga vida + Service + IngressRoute de Traefik bajo `https://<slug>.jinserver.com` (NUNCA `jeanfranck.com` ni ninguno de sus subdominios — regla de oro #10: esto ES contenido generado por agentes). El pod corre el comando declarado (`npm run dev`, `node server.js`, etc.) sobre un workspace montado (el código que el agente generó/clonó en su branch).
 - **Slug con entropía**: `<nombre-legible>-<sufijo aleatorio>` (ej. `residuos-educan-a7f3k9`). Delante de una preview no hay login, así que la única barrera contra quien adivine la URL es la parte aleatoria; el prefijo legible existe solo para distinguirlas de un vistazo. Nunca un slug derivado únicamente del nombre del proyecto.
 - **TTL obligatorio**: el owner lo define al aprobar (ej. "mantenlo 4h"), con default corto y **cap duro de 24h**. Un reaper (`@Cron`) destruye pod+Service+IngressRoute vencidos. Extender el TTL requiere una aprobación nueva, no es un flag. Límite de servicios concurrentes (default bajo).
-- **Restricciones de la VM (verificadas contra los manifests reales)**: el namespace `agents-sandbox` ya tiene `ResourceQuota` de 6Gi/1500m y `LimitRange` de 512Mi por pod (máx 2Gi) — respetarlos, no ampliarlos en este PR. Tres cosas que hay que resolver o el hot reload falla: (a) subir `fs.inotify.max_user_watches` en el nodo, porque al agotarse el hot reload deja de funcionar **en silencio**, sin error claro; (b) la VM es ARM64 (Ampere), así que las imágenes y dependencias nativas deben tener build aarch64 — declarárselo explícitamente al agente que genera el proyecto; (c) un PVC compartido como store de pnpm para no pagar 30-90s de `install` en frío por cada preview.
+- **Restricciones de la VM (verificadas contra los manifests reales)**: el namespace `agents-sandbox` ya tiene `ResourceQuota` de 2Gi/1000m y `LimitRange` de 512Mi por pod (máx 1Gi) — respetarlos, no ampliarlos en este PR. Tres cosas que hay que resolver o el hot reload falla: (a) subir `fs.inotify.max_user_watches` en el nodo, porque al agotarse el hot reload deja de funcionar **en silencio**, sin error claro; (b) la VM es ARM64 (Ampere), así que las imágenes y dependencias nativas deben tener build aarch64 — declarárselo explícitamente al agente que genera el proyecto; (c) un PVC compartido como store de pnpm para no pagar 30-90s de `install` en frío por cada preview.
 - Sin secretos: los pods de servicio jamás reciben env vars de Infisical ni tokens. NetworkPolicy: mismo modelo de egress whitelist que los pods de ejecución (npm registry para instalar deps, y nada más por default). Resources y probes obligatorios.
 - RBAC: el ServiceAccount `executor` gana `create/delete` de Services e IngressRoutes SOLO en `agents-sandbox` — actualiza los manifests en Jin_Infra (coordina en STATUS.md: repo de Antigravity, cambio acotado tuyo por ser frontera de seguridad, mismo precedente que backups en Fase 1.2).
 - Jin_Core: declarar las tools en `registry.ts` — `startPreviewService` con `hitlLevel: 'confirm'` (expone código de agentes a internet, aunque sea en el dominio sandbox), `stopPreviewService` con `notify`, `listPreviewServices` con `auto`. Registrar los executors correspondientes (cliente HTTP del Executor de 5.2).
@@ -734,29 +734,35 @@ ANTES DE IMPLEMENTAR: Propón el plan. Espera aprobación.
 
 ## Fase 7 — Deploy real, activación y hardening
 
-### 7.1 [ANTIGRAVITY] — Deploy de las apps + GitOps (repos: Jin_Infra + Dockerfiles en cada repo)
+### 7.1 [CLAUDE CODE] — Deploy de las apps + GitOps (repos: Jin_Infra + Dockerfiles en Jin_Core/Jin_Executor)
+
+**Reasignada de Antigravity a Claude Code el 2026-08-05** (mismo criterio que Jin_Web el 2026-08-02 — el owner quiso control directo sobre infra real).
+
+**Corrección de rumbo (2026-08-05):** este prompt decía "Jin_Web (build estático servido por nginx/caddy)" — incorrecto. `BLUEPRINT.md` §8.1/§12.4 y `Jin_Web/react-router.config.ts` (`ssr: false`) son inequívocos: Jin_Web se sirve desde **Cloudflare Pages**, fuera del clúster. No lleva Dockerfile ni manifest K8s — solo un step de CI (`cloudflare/pages-action`) en su propio repo. También decía "secrets vía Infisical" para core — Infisical SDK en runtime es Fase 8.1 (después de esta), así que por ahora las env vars reales van en Secrets de K8s sembrados por `02-seed-secrets.sh` (mismo mecanismo huevo-gallina que `postgres-credentials`), migran a Infisical cuando llegue 8.1.
 
 ```
-La infra base existe (Fase 1) pero NINGUNA app tiene manifest de deploy — core, executor y web nunca se han desplegado. Vas a cerrar ese hueco. Jin_Infra es tuyo; los Dockerfiles se agregan en cada repo de app (coordina en STATUS.md los de Jin_Core/Executor, que comparten ownership de CI con Claude Code).
+La infra base existe (Fase 1) pero NINGUNA app tiene manifest de deploy — core, executor y web nunca se han desplegado. Vas a cerrar ese hueco. Jin_Infra es tuyo; los Dockerfiles se agregan en Jin_Core/Jin_Executor (Jin_Web no necesita uno — ver corrección de rumbo arriba).
 
 ANTES DE ESCRIBIR CÓDIGO:
 1. Lee `../Jin_Docs/docs/BLUEPRINT.md` secciones 4.4 (resources obligatorios), 5 (dominios/Traefik) y 12 completa (deployment, GitOps con Flux, CI/CD).
-2. Lee los manifests existentes en `Jin_Infra/k8s/base/` para seguir el estilo (probes, resources, kustomize).
+2. Lee los manifests existentes en `Jin_Infra/k8s/base/` para seguir el estilo (probes, resources, kustomize) — y busca PVCs ya creados en fases previas (ej. `k8s/base/backup/core-data-pvc.yaml` ya reserva el volumen de `memory.db`) antes de crear uno nuevo.
 
 TU TAREA:
-- Dockerfiles multi-stage pinneados para Jin_Core, Jin_Executor y Jin_Web (build estático servido por nginx/caddy), publicados a GHCR desde el CI de cada repo.
-- Manifests: Deployment de core (1 réplica, rolling con surge, PVC para `memory.db` montado en `MEMORY_DB_PATH`, secrets vía Infisical), Deployment del executor (ServiceAccount `executor` ya existente), Deployment de web, IngressRoutes de Traefik (`jin.jeanfranck.com` con el path `/api` ruteado al core vía route rule de Cloudflare, y `*.jinserver.com` para applets/previews).
+- Dockerfiles multi-stage pinneados para Jin_Core y Jin_Executor, publicados a GHCR desde el CI de cada repo (recordar: el nodo K3s es Ampere/ARM64 — build multi-arch o al menos `linux/arm64` explícito, si no el pod nunca arranca).
+- Manifests: Deployment de core (1 réplica, rolling con surge, PVC existente de `memory.db` montado en `MEMORY_DB_PATH`, secrets vía Secret de K8s por ahora), Deployment del executor (ServiceAccount `executor` ya existente, sin tocar su RBAC), IngressRoute de Traefik estática para `jin.jeanfranck.com` + `PathPrefix(/api)` → core (el resto del host lo sirve Cloudflare Pages, fuera del clúster). Las IngressRoutes de `*.jinserver.com` para previews ya las crea el Executor en runtime (ADR 0006) — no van en Jin_Infra.
 - Flux bootstrap: GitOps sobre `Jin_Infra` (BLUEPRINT 12.1) — un push a main reconcilia el clúster.
 - NetworkPolicies coherentes con las existentes.
+- CI de Jin_Web: step de deploy a Cloudflare Pages (no Dockerfile).
 
 CRITERIOS DE ÉXITO:
-- `kubectl apply --dry-run=server` limpio en todo; `kubectl kustomize` sin errores.
-- CI de cada repo publica imagen taggeada por SHA; Flux la despliega al actualizar el manifest.
+- `kubectl kustomize` sin errores (validado localmente con `kubectl` aunque no haya clúster real).
+- CI de cada repo (Core/Executor) publica imagen taggeada por SHA; Flux la despliega al actualizar el manifest.
 - Ningún secreto en YAML; resources y probes en todo Deployment (AGENTS 4.4).
 - Actualiza `../Jin_Docs/STATUS.md`.
 
 RESTRICCIONES:
 - Prohibido `latest`. Prohibido `hostNetwork`. El executor mantiene su RBAC actual sin ampliaciones.
+- Cargar secretos reales, el consent OAuth, el webhook de Telegram y el smoke test quedan para 7.2 — esta fase es solo código (manifests/Dockerfiles/CI), sin ejecutar nada en la VM real.
 
 ANTES DE IMPLEMENTAR: Propón el plan. Espera aprobación.
 ```
@@ -817,6 +823,8 @@ ANTES DE IMPLEMENTAR: Propón el plan. Espera aprobación.
 
 ### 8.1 [CLAUDE CODE] — Infisical SDK en runtime (repos: Jin_Core + Jin_Executor)
 
+**Código listo, 2026-09-13** — [Jin_Core #29](https://github.com/JFrnck/Jin_Core/pull/29), [Jin_Executor #11](https://github.com/JFrnck/Jin_Executor/pull/11), [Jin_Infra #12](https://github.com/JFrnck/Jin_Infra/pull/12). El alcance real terminó tocando también Jin_Infra (Deployments + `02-seed-secrets.sh` + script nuevo de identidades), no solo Core/Executor como decía este prompt originalmente — necesario para que el diseño fuera real y no solo teórico. Ver `STATUS.md` sección "Fase 8.1" para el detalle técnico y el gate manual pendiente (crear el proyecto/identidades en Infisical).
+
 ```
 BLUEPRINT §11 dice literal: "core y Executor los cargan al startup vía SDK; nunca están en env plain". Hoy es exactamente al revés: todo pasa por `src/config/env.schema.ts` como env vars planas, y el SDK de Infisical no está importado en ningún lado (verificado: cero ocurrencias en `src/`). El manifest de Infisical SÍ existe y se despliega (Jin_Infra `k8s/base/infisical`, Fase 1.1) — lo que falta es que las apps lo consuman.
 
@@ -848,6 +856,8 @@ ANTES DE IMPLEMENTAR: Propón el plan. Espera aprobación.
 ```
 
 ### 8.2 [CLAUDE CODE] — Golden set de prompt injection (repo: Jin_Core)
+
+**Código listo, 2026-09-13** — [Jin_Core #30](https://github.com/JFrnck/Jin_Core/pull/30), 50 entradas en 8 categorías. Ver `STATUS.md` sección "Fase 8.2" para el detalle técnico y la verificación del criterio "al menos 3 fallan si se comenta el escapado" (34 de 84 fallaron).
 
 ```
 BLUEPRINT §13.1 lista como **OBLIGATORIO**: "Prompt injection golden set: corpus de ~50 prompts adversariales conocidos; el sistema debe manejarlos correctamente". Verificado: no existe (cero archivos golden/adversarial en el repo). Hoy `injection-sanitizer.spec.ts` cubre el escapado de delimitador y el nonce, que es la unidad — no el sistema end-to-end contra un corpus real.

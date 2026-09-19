@@ -115,7 +115,7 @@ Tu argumento es correcto y lo hago explícito: **en un flujo con HITL, la latenc
 Cambios aplicados:
 
 - Warm pool eliminado. El executor crea el pod **bajo demanda**, ejecuta, destruye. Con la imagen Deno pre-descargada en el nodo (pre-pull en bootstrap), el arranque es ~2-5 s.
-- La ResourceQuota de `agents-sandbox` (6 Gi / 1500m) pasa de reserva ocupada a **techo de ráfaga**: consumo idle cero.
+- La ResourceQuota de `agents-sandbox` (2 Gi / 1000m) pasa de reserva ocupada a **techo de ráfaga**: consumo idle cero.
 - Executor más simple: muere la lógica de replenish/readiness del pool (menos código crítico que testear).
 - **Coherencia aplicada también a core:** 2 réplicas "para rolling updates" eran otro pod siempre encendido redundante para un solo usuario. Ahora **1 réplica** con `maxSurge: 1, maxUnavailable: 0` — el rolling update sigue siendo sin downtime (K8s levanta la nueva antes de matar la vieja). Ahorro: ~512Mi-1Gi. Si no estás de acuerdo, es revertir un número.
 
