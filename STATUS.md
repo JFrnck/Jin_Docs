@@ -29,8 +29,15 @@
 2. §7.2 `02-seed-secrets.sh` → §7.3 → §7.5 `04-apply-manifests.sh` (ya aplica las migraciones) → §7.6 Infisical (manual) → §7.7 Flux (gate deliberado).
 3. Activación: [`docs/runbooks/activation.md`](docs/runbooks/activation.md) (nuevo, Fase 7.2).
 
-### 🟡 Abierto, requiere revisión del owner (no se envió en automático a propósito)
-- **Doble ejecución de una aprobación** (`Jin_Core/src/hitl/approval-execution.service.ts`): lee el pendiente → `recordApproval` → ejecuta → audita → borra, sin reclamo atómico. Dos aprobaciones casi simultáneas (Web + Telegram, doble clic) pueden ejecutar `sendEmail` dos veces; si falla el audit/borrado tras ejecutar, el pendiente sigue vivo. Es lógica de HITL (`CLAUDE.md`: planning mode + revisión línea por línea), así que se deja como issue, no como PR.
+### ✅ HITL: carrera de doble aprobación (#36) y modos de autonomía — ADR 0010
+Plan aprobado por el owner el 2026-09-19 (`CLAUDE.md` §2.1) y ejecutado en PRs separados; detalle y decisiones en [`docs/adr/0010-hitl-autonomy-modes-and-atomic-approval-claim.md`](docs/adr/0010-hitl-autonomy-modes-and-atomic-approval-claim.md).
+- **#36 cerrado** (Jin_Core #37, mergeado): reclamo atómico de la ejecución. Reproducido antes de corregir: **10 aprobaciones concurrentes ejecutaron `sendEmail` 10 veces**; ahora exactamente 1. Fail-closed (audit antes de ejecutar), sin reintento automático tras fallo, reclamos trabados se alertan y nunca se reejecutan solos.
+- **Modos de autonomía** (Jin_Core #38): `supervised` (default) / `semi-auto` / `auto`. Solo `confirm` se relaja a `notify`; **`dual-confirm` nunca**; en semi-auto siguen pidiendo aprobación `sendEmail`, `deleteCalendarEventFuture` y `mergeAgentBranch`. Bajar la protección exige dual-confirm real; volver a más restrictivo es inmediato; caducan solos (auto 4 h / semi 24 h) y hay freno de emergencia (20 acciones/h). Control: Telegram `/mode` y `GET/POST /api/autonomy`.
+- **Hallazgo corregido de paso: `notify` no notificaba a nadie** (solo dejaba una fila en el audit). Ahora avisa por Telegram y, si un modo la relajó, dice por qué.
+- ⚠️ **Toca `src/hitl/**` y `src/audit/`**: se mergeó por instrucción explícita del owner, pero **queda pendiente tu revisión línea por línea** del diff (`CLAUDE.md` §2.1).
+- Pendiente: interruptor en el dashboard (Jin_Web) y `jin mode` (Jin_CLI).
+
+### 🟡 Abierto (decisiones de diseño de la Fase 9.5, no bloquean)
 - Preguntas de diseño de la Fase 9.5: cada SIGHUP con un override que baja el nivel crea una aprobación dual-confirm nueva sin deduplicar; el override solo se aplica en `AgentService` (no en `orchestrator.service.ts` ni en los `Google*ToolsService`).
 
 ### Roadmap restante
