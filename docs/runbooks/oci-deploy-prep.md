@@ -188,7 +188,7 @@ Estos **no los puede resolver un agente automatizado** porque requieren sesión 
 - [ ] Cuenta de Cloudflare con `jeanfranck.com` y `jinserver.com` gestionados ahí (DNS delegado a Cloudflare).
 - [ ] Cloudflare Tunnel creado (Zero Trust → Tunnels) — token del túnel a mano.
 - [ ] Cloudflare API Token con scope `Zone.DNS Edit` en ambas zonas (lo usa cert-manager para el challenge DNS-01 de los certificados wildcard).
-- [ ] CNAME wildcard `*.jeanfranck.com` y `*.jinserver.com` apuntando al túnel (`<tunnel-id>.cfargotunnel.com`).
+- [ ] DNS hacia el túnel (`<tunnel-id>.cfargotunnel.com`, CNAME **Proxied**): en `jeanfranck.com` solo dos registros explícitos, `jin` y `grafana` (es tu portafolio; no se expone nada más); en `jinserver.com` el comodín `*` (cada preview crea un subdominio). Los public hostnames del túnel (`*.jeanfranck.com`, `*.jinserver.com`, HTTPS → `traefik.kube-system.svc.cluster.local:443`, Origin Server Name `*.<dominio>`) no reciben tráfico sin el registro DNS. Ojo: Cloudflare **no** crea el DNS de los hostnames con comodín.
 - [ ] GitHub PAT con scope `read:packages` (para que el clúster pueda hacer `docker pull` de las imágenes privadas en GHCR).
 - [ ] GitHub PAT con scope `repo` (lo usa `05-flux-bootstrap.sh` para el GitOps sobre `Jin_Infra`).
 - [ ] Flux CLI instalado a mano en la VM — **es un gate deliberado, no automatizable**: instalar un controlador GitOps con permisos cluster-wide requiere intervención humana consciente. El comando exacto (con verificación de checksum) te lo imprime `scripts/bootstrap/05-flux-bootstrap.sh` si intentás correrlo sin tenerlo instalado — seguí esas instrucciones al pie de la letra, no lo automatices.
@@ -240,7 +240,7 @@ bash scripts/bootstrap/02-seed-secrets.sh
 ⚠️ **Respaldá `~/.jin-secrets.env` fuera de la VM** (gestor de contraseñas), sobre todo `AGE_PRIVATE_KEY`: sin ella los backups en R2 no se pueden descifrar si la VM se pierde. El script se niega a sobrescribir un archivo existente por eso mismo. Los Secrets ya sembrados en K8s no dependen del archivo; una vez respaldado podés borrarlo de la VM (`shred -u ~/.jin-secrets.env`).
 
 ### 7.3 `03-verify-tunnel-dns.sh`
-No crea nada — verifica que el túnel de Cloudflare y el DNS wildcard (configurados a mano en §6) estén realmente funcionando.
+No crea nada — verifica que el túnel de Cloudflare y el DNS (`jin`, `grafana`, y el comodín de jinserver.com; configurados a mano en §6) estén realmente funcionando.
 ```bash
 bash scripts/bootstrap/03-verify-tunnel-dns.sh
 ```

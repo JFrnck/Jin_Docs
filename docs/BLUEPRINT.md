@@ -268,7 +268,7 @@ Aunque el dominio sandbox lleve la marca en el nombre, es desechable por diseño
 ### 5.3 DNS y certificados
 
 - Ambos dominios con Cloudflare como DNS.
-- CNAME wildcard `*.jeanfranck.com` y `*.jinserver.com` apuntando al túnel.
+- DNS hacia el túnel: CNAME explícitos `jin` y `grafana` en `jeanfranck.com` (portafolio del owner: no se expone nada más) y CNAME wildcard `*.jinserver.com` (subdominios dinámicos de previews).
 - **cert-manager** con `ClusterIssuer` de Let's Encrypt usando challenge **DNS-01** (obligatorio para wildcards). Credenciales Cloudflare API en Infisical.
 
 ### 5.4 Ingress dinámico
