@@ -106,6 +106,9 @@ Corré **en este orden** y no sigas si uno falla — cada uno prueba una pieza d
 | 12c | Qué se relaja | en semi: *"ejecutá `console.log(1)`"* y *"mandá un correo de prueba"* | `runCode` se ejecuta y **te avisa por Telegram**; el correo **sigue pidiendo aprobación** |
 | 12d | Volver al modo seguro | `/mode safe` | inmediato, sin aprobación; avisa el cambio |
 | 12e | Caducidad | `/mode semi 1` aprobado, esperar 1 h (o `UPDATE autonomy_mode_state SET expires_at = now()` y esperar 1 min) | vuelve solo a supervisado y avisa |
+| 13a | Zona horaria del pod (Fase 9.4) | `kubectl -n jin exec deploy/jin-core -- date` | hora de **Lima** (UTC-5), no UTC. Si sale UTC, el cron de las 00:00 corre a las 19:00 y el de las 06:00 a la 01:00 |
+| 13b | Alerta matutina 06:00 (Fase 9.4) | al día siguiente a las 06:00 (Lima) | llega por Telegram el resumen de prioridades. Si la corrida de las 00:00 falló, **lo dice** ("FALLÓ" + motivo); si no corrió, dice "NO se ejecutó". `SELECT status, ran_at FROM shadowing_runs ORDER BY ran_at DESC LIMIT 3;` muestra las corridas |
+| 13c | CLI con menús (Fase 9.6) | `jin inbox` con una aprobación pendiente (paso 4) | navegas con ↑↓, Enter abre el detalle, aprobar pide confirmación; «No» está resaltado por defecto |
 | 12 | Cadena del audit | `GET /api/audit` (o dashboard → Audit) y `kubectl -n jin logs deploy/jin-core \| grep -i AUDIT_CHAIN` | filas encadenadas de las pruebas 3–6; **ningún** `AUDIT_CHAIN_LOCKED` (el lock bloquea toda escritura tras detectar corrupción) |
 
 El paso **4/5** es el que importa: es la regla de oro #7 en acción. Si el correo se envía sin pasar por aprobación, **detené todo y revertí**: es un fallo de seguridad, no un bug.

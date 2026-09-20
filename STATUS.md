@@ -1,6 +1,6 @@
 # STATUS
 
-## Última actualización: 2026-09-19 (America/Lima) — actualización 26
+## Última actualización: 2026-09-19 (America/Lima) — actualización 27
 
 ## Sesión 2026-09-19 — deploy reanudado: código en `main`, VM lista hasta el gate de secretos
 
@@ -38,11 +38,20 @@ Plan aprobado por el owner el 2026-09-19 (`CLAUDE.md` §2.1) y ejecutado en PRs 
 - **Interruptor completo en las tres superficies**: Telegram `/mode`, dashboard `/autonomy` con banner global mientras el HITL esté relajado (Jin_Web #8), y `jin mode` (Jin_CLI #6). Web y CLI también muestran cuando una aprobación falló al ejecutarse ("NO se ejecutó; no se reintenta sola"), y la CLI distingue el 409 de "ya resuelta" del de "segunda aprobación demasiado pronto".
 - **Defecto de mi PR #38 encontrado y corregido (Jin_Core #39):** dos DTOs de unión anónimos (`createZodDto(...)`) compartían el nombre interno `AugmentedZodDto` y Swagger dejaba solo uno, así que `POST /api/hitl/{id}/approve` quedó documentando la respuesta de `POST /api/autonomy` en `contracts/openapi.json`. Lo detectó el compilador de la CLI al generar sus tipos; **ningún test lo veía porque el contrato nunca se validaba, solo se regeneraba**. Ahora: nombre propio por DTO, `src/contract.spec.ts` (verificado por mutación) y el CI comprueba `git diff --exit-code contracts/openapi.json`.
 
+### ✅ Fase 9.4 (alerta matutina 06:00) y 9.6 (CLI admin) — ADR 0011
+Plan aprobado por el owner el 2026-09-19. Detalle y decisiones en [`docs/adr/0011-fase-9-4-alerta-matutina-y-9-6-cli-admin.md`](docs/adr/0011-fase-9-4-alerta-matutina-y-9-6-cli-admin.md).
+- **9.4** (Jin_Core #40 + Jin_Infra #22/#23, mergeados): cada corrida del Shadowing de las 00:00 se persiste (`shadowing_runs`, migración 0012, **también las fallidas**) y a las 06:00 llega por Telegram el resumen de prioridades **sin una segunda llamada al LLM**. Si la corrida falló o no existe, el mensaje lo dice explícitamente (nunca un resumen vacío). El resumen es contenido no confiable: texto plano, sin `parse_mode`, truncado a 4096. HITL `auto` con fila de audit.
+- **Bug de despliegue encontrado de paso: ningún pod tenía `TZ`**, así que los crons (`0 0 * * *`) y el reset diario del budget corrían en **UTC** (el "00:00 local" era 19:00 en Lima). Infra #22 fija `TZ=America/Lima` (igual que los CronJobs de backup; mudarse a Canadá = una línea). *Decisión mía, revocable: Lima.*
+- **9.6** (Jin_CLI #7): `jin inbox` (bandeja con flechas: aprobar/rechazar sin copiar UUIDs; «Volver» y «No» son lo resaltado por defecto), `jin budget [unpause]`, `jin audit [n]`, `jin previews [stop [id]]`, `jin runs [id]`. Solo endpoints reales del contrato. Sin TTY caen a texto; `--yes` salta la confirmación en scripts. **Verificado en una terminal real (pty)**, no solo con la librería de tests.
+- **Desviación de BLUEPRINT §8.3:** `ink-select-input` en vez de Inquirer.js (Inquirer toma el stdin y choca con Ink).
+- **Diferido, sin endpoint:** rotar tokens, forzar backup, ver logs desde la CLI (Core no puede tocar K8s, regla de oro #1). Requiere una tarea aparte vía Executor si lo quieres.
+- Nota de tooling: `ink-testing-library@3` no implementa `stdin.ref()/unref()/read()` que usa Ink 4.4; `test.tsx` de la CLI lo parcha.
+
 ### 🟡 Abierto (decisiones de diseño de la Fase 9.5, no bloquean)
 - Preguntas de diseño de la Fase 9.5: cada SIGHUP con un override que baja el nivel crea una aprobación dual-confirm nueva sin deduplicar; el override solo se aplica en `AgentService` (no en `orchestrator.service.ts` ni en los `Google*ToolsService`).
 
 ### Roadmap restante
-9.1 (Notion + `/audio`), 9.4 (alerta 06:00) y 9.6 (CLI admin) son de Antigravity; 9.2 (GitHub App + git real, desbloquea `mergeAgentBranch`) es de Claude Code y requiere que el owner cree la GitHub App.
+Quedan **9.1** (Notion + `/audio`; requiere que el owner cree la integración de Notion) y **9.2** (GitHub App + git real, desbloquea `mergeAgentBranch`; requiere que el owner cree la GitHub App; recomiendo Opus por ser frontera de seguridad). Ambas necesitan un plan aprobado antes de implementarse. 9.4 y 9.6 están hechas (arriba).
 
 ---
 
