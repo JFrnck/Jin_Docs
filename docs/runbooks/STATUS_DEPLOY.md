@@ -483,4 +483,23 @@ Esto hace que el *cliente* también mande pings — entre esto y el `ClientAlive
 
 ---
 
+### 2026-09-20 — Primer despliegue real: secretos, manifiestos y esquema aplicados; queda el gate de Infisical (§7.6)
+
+**Hecho (VM `jin-assistant`, K3s v1.36.2):**
+- Cloudflare: túnel `jin-server-tunnel` con las rutas `*.jeanfranck.com` / `*.jinserver.com`; DNS = CNAME explícitos `jin` y `grafana` en `jeanfranck.com` (es el portafolio del owner, no se expone nada más) y comodín `*` en `jinserver.com`. R2: bucket `jin-backups` + token de cuenta limitado a él (Object R&W, sin filtro de IP a propósito: una restauración debe poder hacerse desde cualquier máquina). Tokens de Cloudflare (DNS) y GHCR (`read:packages`, solo lectura; las imágenes son públicas, verificado sin credenciales).
+- `00-generate-local-secrets.sh` → el owner completó las 7 externas en `~/.jin-secrets.env` (verificado por nombre/longitud/formato, nunca por valor; se corrigió un `GHCR_USERNAME` mal pegado) y lo respaldó fuera de la VM → `02-seed-secrets.sh` (11 Secrets, 5 namespaces) → `03-verify-tunnel-dns.sh` OK → `04-apply-manifests.sh`.
+- **Esquema de la BD `jin` verificado de verdad:** 16 tablas, 13 migraciones (0000–0012), `autonomy_mode_state = supervised`.
+- **cert-manager: los 4 Certificate wildcard y el ClusterIssuer en `True`** (el token DNS funciona; Let's Encrypt DNS-01 emitió en ~2 min). Desde internet: TLS válido en `grafana` (302) y `jin` (503 mientras Core no esté Ready).
+- Postgres, Redis, cloudflared, Grafana, Loki, Prometheus, Promtail `Running`.
+
+**Bloqueante nuevo encontrado y corregido — Infisical no migraba su BD.** La imagen `infisical/infisical:v0.99.0-postgres` no migra al arrancar y el Deployment no tenía ningún paso de migración: la BD `infisical` quedó con **0 tablas** y el pod en `CrashLoopBackOff` (`DatabaseError` en su primera consulta). Validado en la VM con un Job puntual (`npm run migration:latest`: 148 migraciones, 126 tablas) y corregido de forma permanente con un `initContainers: migrate` (Jin_Infra #25; idempotente: "Already up to date" en un arranque normal). `04-apply-manifests.sh` había abortado en `rollout status infisical`; los pasos posteriores (observabilidad, certificados) se comprobaron a mano.
+
+**Pendiente — gate del owner, §7.6:** Core y Executor están en `CreateContainerConfigError` porque faltan los Secrets `jin-core-infisical-auth` / `jin-executor-infisical-auth` (credenciales de identidad de máquina de Infisical). Es la señal esperada. Requiere: cuenta admin en Infisical (port-forward), proyecto `jin` + environment `prod`, las 13 claves de Core (`ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENAI_API_KEY`, `CANVAS_BASE_URL`, `CANVAS_API_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_OWNER_CHAT_ID`, `TELEGRAM_WEBHOOK_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`, `OWNER_PASSWORD_HASH`, `JWT_SECRET`) y las 2 de Executor (Modal), dos identidades Universal Auth, y el PR que reemplaza `PENDIENTE_CREAR_PROYECTO_INFISICAL` por el Project ID.
+
+**Abierto (decisión, no bloquea):** Redis corre con `maxmemory-policy allkeys-lru` y Infisical avisa de que espera `noeviction` (BullMQ). Cambiarlo afecta a lo que Core cachea en el mismo Redis (con `noeviction`, un Redis lleno rechaza escrituras en vez de evictar).
+
+**Nota operativa:** en una sesión ssh sin terminal `KUBECONFIG` no está definido (`.bashrc` no se carga) y `/etc/rancher/k3s/k3s.yaml` es de root: usar `export KUBECONFIG=$HOME/.kube/config`.
+
+---
+
 <!-- Agregar entradas nuevas arriba de esta línea, más reciente primero. Cada entrada: qué se hizo, qué falta, y qué le quedó pedido al owner (si algo). -->
