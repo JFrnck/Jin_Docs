@@ -101,6 +101,11 @@ Corré **en este orden** y no sigas si uno falla — cada uno prueba una pieza d
 | 9 | Presupuesto | `/budget` y `GET /api/budget` | números reales, kill switch inactivo |
 | 10 | Backup | `kubectl -n jin create job --from=cronjob/backup-postgres smoke-backup` | Job `Complete`; objeto nuevo en R2 |
 | 11 | Restore | `kubectl -n jin create job --from=cronjob/verify-restore smoke-restore` | Job `Complete` (nunca toca datos de producción) |
+| 12a | Modo por defecto | Telegram `/mode` | "supervisado (HITL completo)". Si dice otra cosa, **detené todo**: el default sembrado por la migración es `supervised` |
+| 12b | Cambiar a semiautomático | `/mode semi 1` | **no cambia solo**: pide DOBLE aprobación (`/approve <id>`, esperar 30 s, `/approve <id>` otra vez); recién ahí `/mode` dice semiautomático |
+| 12c | Qué se relaja | en semi: *"ejecutá `console.log(1)`"* y *"mandá un correo de prueba"* | `runCode` se ejecuta y **te avisa por Telegram**; el correo **sigue pidiendo aprobación** |
+| 12d | Volver al modo seguro | `/mode safe` | inmediato, sin aprobación; avisa el cambio |
+| 12e | Caducidad | `/mode semi 1` aprobado, esperar 1 h (o `UPDATE autonomy_mode_state SET expires_at = now()` y esperar 1 min) | vuelve solo a supervisado y avisa |
 | 12 | Cadena del audit | `GET /api/audit` (o dashboard → Audit) y `kubectl -n jin logs deploy/jin-core \| grep -i AUDIT_CHAIN` | filas encadenadas de las pruebas 3–6; **ningún** `AUDIT_CHAIN_LOCKED` (el lock bloquea toda escritura tras detectar corrupción) |
 
 El paso **4/5** es el que importa: es la regla de oro #7 en acción. Si el correo se envía sin pasar por aprobación, **detené todo y revertí**: es un fallo de seguridad, no un bug.
