@@ -189,8 +189,11 @@ Estos **no los puede resolver un agente automatizado** porque requieren sesión 
 - [ ] Cloudflare Tunnel creado (Zero Trust → Tunnels) — token del túnel a mano.
 - [ ] Cloudflare API Token con scope `Zone.DNS Edit` en ambas zonas (lo usa cert-manager para el challenge DNS-01 de los certificados wildcard).
 - [ ] DNS hacia el túnel (`<tunnel-id>.cfargotunnel.com`, CNAME **Proxied**): en `jeanfranck.com` solo dos registros explícitos, `jin` y `grafana` (es tu portafolio; no se expone nada más); en `jinserver.com` el comodín `*` (cada preview crea un subdominio). Los public hostnames del túnel (`*.jeanfranck.com`, `*.jinserver.com`, HTTPS → `traefik.kube-system.svc.cluster.local:443`, Origin Server Name `*.<dominio>`) no reciben tráfico sin el registro DNS. Ojo: Cloudflare **no** crea el DNS de los hostnames con comodín.
-- [ ] GitHub PAT con scope `read:packages` (para que el clúster pueda hacer `docker pull` de las imágenes privadas en GHCR).
-- [ ] GitHub PAT con scope `repo` (lo usa `05-flux-bootstrap.sh` para el GitOps sobre `Jin_Infra`).
+- [ ] GitHub PAT **classic** con scope `read:packages` y nada más (lo usa el clúster para `docker pull` desde GHCR). Nota: los repos de Jin son **públicos**, así que este token solo lee lo que ya es público — riesgo bajo, pero el script `02` lo exige igual.
+- [ ] GitHub PAT para Flux (`05-flux-bootstrap.sh`). **Usá uno fine-grained, no el classic `repo`:** el classic da control total sobre *todos* tus repos privados, y Flux solo necesita uno. Configuralo así — *Settings → Developer settings → Personal access tokens → Fine-grained tokens*:
+  - **Repository access:** *Only select repositories* → **solo `Jin_Infra`**.
+  - **Permissions → Repository:** `Contents` **Read and write**, `Administration` **Read and write** (Flux crea la deploy key), `Metadata` **Read-only** (se marca sola).
+  - **Expiration:** corta (30 días basta). Se usa **una sola vez**, en el bootstrap: después Flux trabaja con la deploy key que dejó creada, así que podés dejar que caduque.
 - [ ] Flux CLI instalado a mano en la VM — **es un gate deliberado, no automatizable**: instalar un controlador GitOps con permisos cluster-wide requiere intervención humana consciente. El comando exacto (con verificación de checksum) te lo imprime `scripts/bootstrap/05-flux-bootstrap.sh` si intentás correrlo sin tenerlo instalado — seguí esas instrucciones al pie de la letra, no lo automatices.
 
 Y los valores para los Secrets que pide `02-seed-secrets.sh` (ver el bloque de comentarios al inicio de ese archivo para la lista completa y actualizada — no la dupliques de memoria acá, ese archivo es la fuente de verdad). Desde Fase 8.1, ese script cubre solo la infra de bootstrap (Postgres/Redis/Infisical/Cloudflare/backups/GHCR) — las API keys de los proveedores de LLM, Telegram, Google OAuth y Modal ya no van ahí: se cargan directo en Infisical en §7.6 (`08-seed-infisical-app-secrets.sh`), después de que el clúster (e Infisical con él) esté arriba.
@@ -294,7 +297,7 @@ Hasta que el PR del punto 4 se mergee y Flux (o un `kubectl apply` manual) lo ap
 ### 7.7 `05-flux-bootstrap.sh`
 Activa GitOps: de acá en adelante, un `git push` a `main` de `Jin_Infra` reconcilia el clúster solo.
 ```bash
-export GITHUB_TOKEN=...   # el PAT con scope repo de §6
+export GITHUB_TOKEN=...   # el PAT fine-grained de §6 (solo Jin_Infra)
 bash scripts/bootstrap/05-flux-bootstrap.sh
 ```
 Si `flux` no está instalado, el script se detiene e imprime instrucciones con verificación de checksum — es a propósito (ver §6), no lo saltees ni lo automatices.
