@@ -518,4 +518,39 @@ Script `08-seed-infisical-app-secrets.sh` corrido (Secrets `jin-core-infisical-a
 
 ---
 
+### 2026-09-21 (tarde) — Jin ARRIBA: `jin-core` y `executor` Ready, API sirviendo por el túnel
+
+**Estado: los 14 pods corriendo.** `jin-core` 1/1 (`/health/live` y `/health/ready` → 200), `executor` 1/1, Postgres, Redis, Infisical, cloudflared, cert-manager y toda la observabilidad. Desde internet: `https://jin.jeanfranck.com/api/budget` → **401** (la API responde y exige login, que es lo correcto), `grafana.jeanfranck.com` → 302, TLS válido en ambos. El bot quedó registrado como `@Jin_dev_bot` con el webhook configurado.
+
+**Tres bloqueantes más, todos encontrados por el despliegue real y ninguno visible en tests:**
+
+| Hallazgo | Por qué no se veía | PR |
+| --- | --- | --- |
+| **Los secretos se cargaban DESPUÉS de validar el entorno.** `ConfigModule.forRoot({ validate })` corre al *importar* su archivo, y `main.ts` importaba `AppModule` de forma estática: `validateEnv()` se ejecutaba antes que `loadSecrets()`. CrashLoop con las 13 claves "undefined" e Infisical sin recibir ni un login. | Los specs del loader están aislados y `container-smoke` pasaba el entorno **completo** por variables. En local tampoco se reproduce desde el repo: `ConfigModule` lee un `.env` del cwd y lo tapa. | Core #41, Executor #13 |
+| **Las credenciales se enviaban a `app.infisical.com`.** Sin `INFISICAL_SITE_URL` el SDK usa su default —la nube de un tercero— y le mandó el clientId/secret de la identidad de máquina (401). El default de Zod no cubre ese camino porque `loadSecrets()` corre antes de que Nest exista. | Nada probaba con qué `siteUrl` se construye el SDK. | Core #44, Executor #18, Infra #29 |
+| **El Executor no podía llegar a Infisical.** La Fase 8.1 movió sus secretos de Modal a Infisical (namespace `jin`), pero su `egress-allowlist` excluye a propósito los CIDRs del clúster y el ingress de `jin` no contemplaba a `jin-executor`. | La política se escribió antes de que existiera esa dependencia. | Infra #31 |
+
+Los tres arreglos van con regresión: `container-smoke` ahora arranca la imagen con `INFISICAL_ENABLED=true` y un Infisical inalcanzable y exige que falle en Infisical, no en la validación; y hay tests que fijan que sin `INFISICAL_SITE_URL` se lanza **sin llamar al login** (cero credenciales en vuelo) y que el SDK apunta exactamente a la URL configurada.
+
+**Aislamiento verificado contra el clúster real (no contra un mock):**
+
+```
+agents-sandbox -> jin-core:3000  BLOQUEADO     executor -> infisical:8080  ALCANZADO
+agents-sandbox -> postgres:5432  BLOQUEADO     executor -> postgres:5432   BLOQUEADO
+agents-sandbox -> infisical:8080 BLOQUEADO     executor -> jin-core:3000   BLOQUEADO
+agents-sandbox -> 1.1.1.1:443    BLOQUEADO     infisical -> jin-core       OK
+```
+
+El sandbox no alcanza nada, ni siquiera internet; el Executor solo el puerto 8080 de Infisical. Es la prueba 8 de `activation.md`.
+
+**Un test de seguridad que no probaba nada (Executor #16, #17).** El test de aislamiento de `agents-sandbox` reportaba `BLOCKED:` ante **cualquier** excepción del probe, así que pasaba por motivos falsos: el DNS todavía sin resolver, o el pod destino todavía sin aceptar conexiones. Cuando esos tiempos cambiaron, el probe llegó de verdad (`REACHED:200`) y el fallo salió a la luz. Ahora el probe va por **ClusterIP** (sin DNS de por medio), `beforeAll` espera a que el destino esté **Ready** y luego **detecta** si el clúster aplica NetworkPolicies; si no las aplica, el test **se salta con aviso** en vez de dar un verde falso.
+
+**CI: el job `docker` colgaba por emulación.** Construir `linux/arm64` con QEMU en un runner amd64 se colgaba de forma intermitente (dos corridas canceladas a las 6 h el 2026-09-19; 57 min y 25 min el 2026-09-21, contra ~5 min normales) y bloqueó el despliegue media mañana. Pasó a `runs-on: ubuntu-24.04-arm` (runner ARM64 nativo, GA y gratis en repos públicos) y se eliminó el paso de QEMU: **el job bajó a 57 segundos** (Core #43, Executor #15).
+
+**Pendiente del owner:** (1) los ~94 duplicados `archivo 2.ext` de iCloud siguen en el disco —ya se ignoran en los 6 repos, pero conviene borrarlos: `find . -name "* [0-9].*" -print` para revisar y `-delete` para eliminar—; (2) reemplazar los valores de relleno de Canvas, Google y Modal cuando los tengas; (3) Flux (§7.7) y los smoke tests de `activation.md` con el bot.
+
+**Nota:** `cloudflared` registra errores de TLS para `www.jinserver.com` / `m.jinserver.com`. Son bots sondeando el comodín: no hay IngressRoute para esos hosts, así que Traefik sirve su certificado por defecto. Las previews reales sí traen el suyo (`wildcard-jinserver-com-tls` en `agents-sandbox`, ver `service-pod-spec.builder.ts`). No es un fallo.
+
+---
+
 <!-- Agregar entradas nuevas arriba de esta línea, más reciente primero. Cada entrada: qué se hizo, qué falta, y qué le quedó pedido al owner (si algo). -->
