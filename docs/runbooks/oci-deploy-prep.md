@@ -284,6 +284,13 @@ bash scripts/bootstrap/08-seed-infisical-app-secrets.sh
 
 Hasta que el PR del punto 4 se mergee y Flux (o un `kubectl apply` manual) lo aplique, `jin-core`/`executor` no van a llegar a `Ready` — es la señal correcta de que falta ese paso, no un error.
 
+> **Verificá los roles en la BD, no en la UI (hallazgo 2026-09-21).** La UI de Infisical v0.99 puede fallar al guardar un rol (`Cannot read properties of undefined (reading 'lhs')`) **dejando sus permisos vacíos sin decirlo**. Comprobá lo que quedó realmente guardado:
+> ```bash
+> kubectl -n jin exec postgres-0 -- psql -U jin -d infisical -At \
+>   -c "select slug, permissions::text from project_roles where slug like 'jin-%' order by slug"
+> ```
+> Esperado: `jin-core-reader` con `read`/`secrets` + `environment $eq prod` + `secretName $in` las 13 claves, y `jin-executor-reader` con las 2 de Modal. Un `[]` significa que la UI no guardó nada.
+
 ### 7.7 `05-flux-bootstrap.sh`
 Activa GitOps: de acá en adelante, un `git push` a `main` de `Jin_Infra` reconcilia el clúster solo.
 ```bash

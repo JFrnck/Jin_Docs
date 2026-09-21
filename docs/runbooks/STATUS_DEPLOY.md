@@ -502,4 +502,20 @@ Esto hace que el *cliente* también mande pings — entre esto y el `ClientAlive
 
 ---
 
+### 2026-09-21 — §7.6 completado (Infisical operativo) y un bug de arranque que ningún test veía
+
+**Hecho por el owner (guiado, sin que yo viera ningún valor):** cuenta admin de Infisical (signups luego en **Disabled**), proyecto `jin` (`76a57a5b-6707-41f1-b85b-559229b036a7`), environment `prod`, **las 15 claves cargadas solo en Production** (13 de Core + 2 de Modal; Canvas y Google con valores de relleno hasta que la universidad autorice), dos identidades Universal Auth (`jin-core`, `jin-executor`) y sus credenciales pegadas en `~/.jin-secrets.env` (18 variables verificadas por nombre/longitud/formato, nunca por valor).
+
+**Menor privilegio real, verificado en la BD de Infisical** (no solo en la UI): `jin-core-reader` = `read secrets` con `environment = prod` y `secretName $in` las 13 claves exactas; `jin-executor-reader` = idem con `MODAL_TOKEN_ID`/`MODAL_TOKEN_SECRET`. **La UI de Infisical v0.99 falla al guardar un rol** (`Cannot read properties of undefined (reading 'lhs')`) y el primer intento de `jin-executor-reader` quedó con permisos vacíos aunque la pantalla no lo dijo: **hay que verificar los roles en la BD, no fiarse de la UI.**
+
+Script `08-seed-infisical-app-secrets.sh` corrido (Secrets `jin-core-infisical-auth` y `jin-executor-infisical-auth`) y `INFISICAL_PROJECT_ID` real en los dos Deployments (Infra #26).
+
+**Bloqueante nuevo — los secretos se cargaban DESPUÉS de validar el entorno (Core #41, Executor #13).** Con todo lo anterior correcto, ambos pods seguían en `CrashLoopBackOff` con `Configuración de entorno inválida: ANTHROPIC_API_KEY: expected string, received undefined` (las 13; en Executor, las 2 de Modal), y **Infisical no registraba ni un intento de login**. Causa: `ConfigModule.forRoot({ validate })` vive en los argumentos del decorador `@Module`, así que **se ejecuta cuando Node importa ese archivo** — el `import { AppModule }` estático de la primera línea de `main.ts` disparaba `validateEnv()` antes de que `bootstrap()` llamara a `loadSecrets()`. El comentario de la Fase 8.1 asumía que `forRoot` se evaluaba dentro de `NestFactory.create()`. Arreglo: `await loadSecrets()` y **después** `await import('./app.module.js')` (dinámico; con `nodenext` el import exige la extensión).
+
+**Por qué ningún test lo vio, y qué se agregó:** los specs del loader están aislados y el job `container-smoke` pasaba el entorno **completo** por variables, así que la imagen arrancaba igual. Además, en local **no se reproduce desde el repo**: `ConfigModule` lee un `.env` del cwd y lo tapa — hay que correr el build desde un directorio limpio (`cd /tmp/x && node <repo>/dist/src/main`). Nuevo paso en `container-smoke` de ambos repos: arranca la imagen con `INFISICAL_ENABLED=true` y un Infisical inalcanzable y **exige** que falle con `InfisicalSDKError`, no con `Configuración de entorno inválida`. Camino feliz probado contra un Infisical falso local: login + `GET /secrets/raw` → la validación pasa y llega a `Starting Nest application`.
+
+**Nota de higiene del repo local:** aparecieron ~94 archivos duplicados `* 2.ext` sin seguimiento (artefactos de sincronización de iCloud Drive con Escritorio activado), incluidos specs que rompen `nest build` fuera de `src/`. No están en `main` ni en las imágenes. Pendiente decidir si se limpian y si se agrega `* 2.*` al `.gitignore` de cada repo.
+
+---
+
 <!-- Agregar entradas nuevas arriba de esta línea, más reciente primero. Cada entrada: qué se hizo, qué falta, y qué le quedó pedido al owner (si algo). -->
