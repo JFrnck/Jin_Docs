@@ -1,6 +1,6 @@
 # STATUS
 
-## Última actualización: 2026-09-19 (America/Lima) — actualización 27
+## Última actualización: 2026-09-21 (America/Lima) — actualización 28
 
 ## Sesión 2026-09-19 — deploy reanudado: código en `main`, VM lista hasta el gate de secretos
 
@@ -46,6 +46,26 @@ Plan aprobado por el owner el 2026-09-19. Detalle y decisiones en [`docs/adr/001
 - **Desviación de BLUEPRINT §8.3:** `ink-select-input` en vez de Inquirer.js (Inquirer toma el stdin y choca con Ink).
 - **Diferido, sin endpoint:** rotar tokens, forzar backup, ver logs desde la CLI (Core no puede tocar K8s, regla de oro #1). Requiere una tarea aparte vía Executor si lo quieres.
 - Nota de tooling: `ink-testing-library@3` no implementa `stdin.ref()/unref()/read()` que usa Ink 4.4; `test.tsx` de la CLI lo parcha.
+
+### 🟣 Puente Claude Code ↔ owner — ADR 0012 (en curso, 2026-09-21)
+Plan aprobado por el owner el 2026-09-21. Decisiones en [`docs/adr/0012-puente-claude-code-owner.md`](docs/adr/0012-puente-claude-code-owner.md).
+
+Una sesión de **Claude Code corriendo en la VM** puede avisarte y **preguntarte con botones**, sin que estés delante del Mac.
+
+- **PR 1 — Jin_Core #48 (abierto):** módulo `src/relay/`, migración 0013, bot de Telegram **separado** del de Jin en long polling, `RELAY_TOKEN` propio, 30 mensajes/hora. 756 unitarios + 119 de integración + 30 e2e.
+- **Por qué un bot aparte:** el chat de Jin es el canal de aprobaciones (regla de oro #7). Claude ingiere contenido no confiable todo el día; una inyección de prompt podría mandar ahí un mensaje con aspecto de Jin y empujarte a aprobar algo. **La frontera es estructural, no una promesa**: el módulo no inyecta los servicios de HITL y `relay.isolation.spec.ts` falla si alguien los importa.
+- **Frontera que no se cruza:** el agente de Jin **no puede lanzar ni controlar Claude Code**. Lo contrario convertiría una inyección de prompt en ejecución arbitraria con los permisos de Claude sobre la VM.
+- **Desviación del plan aprobado:** las dos claves nuevas son **opcionales**, no requeridas — requerirlas dejaría el pod en CrashLoop por una función que no es del núcleo (lo que ya pasó con `INFISICAL_SITE_URL`). Un `refine` exige las dos juntas o ninguna.
+- **Tres fallos encontrados al implementar:** el `.refine()` colgado del schema del que `MigrationEnvSchema` hace `.pick()` hacía que zod lanzara **al importar** `env.schema.ts` (Core moría al arrancar; ni `tsc` ni los tests del módulo lo veían — lo destapó `generate:contract`); el bucle de long polling sobrevivía al apagado del módulo por no tener `onModuleDestroy`; y un `:id` sin validar salía como 500 en vez de 400.
+- **Pendiente:** PR 2 en Jin_Infra (CLI `jin-relay` en bash, bloqueo de `/api/relay` en el ingress público, env vía Infisical, nota de runbook).
+
+#### 🔴 Pendiente del owner antes de desplegar el puente
+1. Crear el bot en **@BotFather** (`/newbot`), guardar el token en el gestor y **hablarle una vez** — un bot no puede escribir primero.
+2. Generar el token: `openssl rand -hex 32`.
+3. Cargar `TELEGRAM_RELAY_BOT_TOKEN` y `RELAY_TOKEN` en Infisical (Production).
+4. Ampliar el rol `jin-core-reader` con esas dos claves, **verificándolo en la base** (la UI de v0.99 falla en silencio).
+
+Si no haces nada de esto, Jin sigue funcionando igual con el puente apagado.
 
 ### 🟡 Abierto (decisiones de diseño de la Fase 9.5, no bloquean)
 - Preguntas de diseño de la Fase 9.5: cada SIGHUP con un override que baja el nivel crea una aprobación dual-confirm nueva sin deduplicar; el override solo se aplica en `AgentService` (no en `orchestrator.service.ts` ni en los `Google*ToolsService`).
