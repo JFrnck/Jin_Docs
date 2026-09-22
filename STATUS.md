@@ -69,8 +69,8 @@ Una sesión de **Claude Code corriendo en la VM** puede avisarte y **preguntarte
 
 Sin esto Jin sigue funcionando exactamente igual — el puente ya está desplegado pero apagado.
 
-### ✅ Jin_Web — rediseño v4 Liquid Glass (2026-09-22)
-Entrega de Claude Design (`Jin/design/`) adaptada al dashboard real — [Jin_Web PR #9](https://github.com/JFrnck/Jin_Web/pull/9).
+### ✅ Jin_Web — rediseño v4 Liquid Glass (mergeado, 2026-09-22)
+Entrega de Claude Design (`Jin/design/`) adaptada al dashboard real — [Jin_Web #9](https://github.com/JFrnck/Jin_Web/pull/9), mergeado. Tipos de la API resincronizados en [Jin_CLI #9](https://github.com/JFrnck/Jin_CLI/pull/9) (mismo gap: `api-types.ts` desactualizado desde el merge del puente en Core, lo hubiera roto en el próximo PR de ese repo — la CLI no consume `/api/relay`, solo mantiene los tipos generados en sincro).
 
 **Corrige el bug reportado por el owner:** el nav inferior móvil solo exponía 4 de las 10 secciones (duplicaba las primeras 4 del sidebar) y ni esas 4 tenían fondo o marca de página activa — eran `NavLink` con estilo inline plano. Audit, Board, Apps, Memoria y Editor eran **inalcanzables desde el móvil**. Ahora: 4 fijas + hoja "Más" con las 5 restantes + Editor deshabilitado ("SOLO ESCRITORIO"). Verificado en vivo con el owner autenticado en el Browser pane.
 
@@ -78,6 +78,8 @@ Entrega de Claude Design (`Jin/design/`) adaptada al dashboard real — [Jin_Web
 - **Hallazgo real al auditar `--sunken`:** se usaba como fondo opaco Y como borde a la vez en ~22 sitios; el borde translúcido de v4 los habría dejado casi invisibles. Se separó en `--sunken` (fondo) y `--hairline` (borde) nuevo.
 - **Bug encontrado por el CI, no por mí:** el `@media (...), not all and (backdrop-filter: ...)` copiado literal del mockup de Claude Design es CSS inválido — `backdrop-filter` no es una media feature, se detecta con `@supports`. `lightningcss` (el minificador de `pnpm build`) lo rechazaba; ni `dev` ni `typecheck`/`lint` lo corren, así que pasó desapercibido hasta el build real de CI. Separado en `@media (prefers-reduced-transparency)` + `@supports not (backdrop-filter)`.
 - Cambios estructurales reales solo en Login (fondo atmosférico), Overview (`PendingHero` nuevo, dos ramas reales), `ApprovalCard` (payload plegable, caja "influido por" en ámbar, relleno de progreso del dual-confirm sobre el botón), Budget y Audit (solo color). El resto hereda el cambio por las clases primitivas compartidas.
+
+**Hallazgo de paso, sin tocar (fuera de alcance, necesita plan propio + credenciales del owner):** el job `deploy` de Jin_Web a Cloudflare Pages falla desde antes de este PR (confirmado: los dos merges anteriores a `main`, #7 y #8, también fallan ahí) — `cloudflare/pages-action` ya no resuelve como Action de GitHub, probablemente deprecada. `build` sigue verde; es solo el paso de deploy. Sigue pendiente el plan de "public web deploy to Cloudflare Pages" ya anotado en el roadmap.
 
 ### 🟡 Abierto (decisiones de diseño de la Fase 9.5, no bloquean)
 - Preguntas de diseño de la Fase 9.5: cada SIGHUP con un override que baja el nivel crea una aprobación dual-confirm nueva sin deduplicar; el override solo se aplica en `AgentService` (no en `orchestrator.service.ts` ni en los `Google*ToolsService`).
