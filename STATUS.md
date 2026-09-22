@@ -1,6 +1,6 @@
 # STATUS
 
-## Última actualización: 2026-09-21 (America/Lima) — actualización 28
+## Última actualización: 2026-09-21 (America/Lima) — actualización 29
 
 ## Sesión 2026-09-19 — deploy reanudado: código en `main`, VM lista hasta el gate de secretos
 
@@ -47,17 +47,17 @@ Plan aprobado por el owner el 2026-09-19. Detalle y decisiones en [`docs/adr/001
 - **Diferido, sin endpoint:** rotar tokens, forzar backup, ver logs desde la CLI (Core no puede tocar K8s, regla de oro #1). Requiere una tarea aparte vía Executor si lo quieres.
 - Nota de tooling: `ink-testing-library@3` no implementa `stdin.ref()/unref()/read()` que usa Ink 4.4; `test.tsx` de la CLI lo parcha.
 
-### 🟣 Puente Claude Code ↔ owner — ADR 0012 (en curso, 2026-09-21)
+### ✅ Puente Claude Code ↔ owner — ADR 0012 (código mergeado, 2026-09-21)
 Plan aprobado por el owner el 2026-09-21. Decisiones en [`docs/adr/0012-puente-claude-code-owner.md`](docs/adr/0012-puente-claude-code-owner.md).
 
-Una sesión de **Claude Code corriendo en la VM** puede avisarte y **preguntarte con botones**, sin que estés delante del Mac.
+Una sesión de **Claude Code corriendo en la VM** puede avisarte y **preguntarte con botones**, sin que estés delante del Mac. **Código mergeado**, falta el gate de secretos del owner para desplegarlo (abajo).
 
-- **PR 1 — Jin_Core #48 (abierto):** módulo `src/relay/`, migración 0013, bot de Telegram **separado** del de Jin en long polling, `RELAY_TOKEN` propio, 30 mensajes/hora. 756 unitarios + 119 de integración + 30 e2e.
+- **PR 1 — Jin_Core #48 (mergeado):** módulo `src/relay/`, migración 0013, bot de Telegram **separado** del de Jin en long polling, `RELAY_TOKEN` propio, 30 mensajes/hora. 756 unitarios + 119 de integración + 30 e2e.
+- **PR 2 — Jin_Infra #36 (mergeado):** CLI `jin-relay` (bash, sin build) con `send`/`ask [--wait]`/`inbox`; `/api/relay` bloqueado del ingress público con un `Middleware` `deny-public` y prioridades explícitas en el `IngressRoute` (una precedencia implícita por longitud de match no es una frontera de seguridad).
 - **Por qué un bot aparte:** el chat de Jin es el canal de aprobaciones (regla de oro #7). Claude ingiere contenido no confiable todo el día; una inyección de prompt podría mandar ahí un mensaje con aspecto de Jin y empujarte a aprobar algo. **La frontera es estructural, no una promesa**: el módulo no inyecta los servicios de HITL y `relay.isolation.spec.ts` falla si alguien los importa.
 - **Frontera que no se cruza:** el agente de Jin **no puede lanzar ni controlar Claude Code**. Lo contrario convertiría una inyección de prompt en ejecución arbitraria con los permisos de Claude sobre la VM.
 - **Desviación del plan aprobado:** las dos claves nuevas son **opcionales**, no requeridas — requerirlas dejaría el pod en CrashLoop por una función que no es del núcleo (lo que ya pasó con `INFISICAL_SITE_URL`). Un `refine` exige las dos juntas o ninguna.
 - **Tres fallos encontrados al implementar:** el `.refine()` colgado del schema del que `MigrationEnvSchema` hace `.pick()` hacía que zod lanzara **al importar** `env.schema.ts` (Core moría al arrancar; ni `tsc` ni los tests del módulo lo veían — lo destapó `generate:contract`); el bucle de long polling sobrevivía al apagado del módulo por no tener `onModuleDestroy`; y un `:id` sin validar salía como 500 en vez de 400.
-- **Pendiente:** PR 2 en Jin_Infra (CLI `jin-relay` en bash, bloqueo de `/api/relay` en el ingress público, env vía Infisical, nota de runbook).
 
 #### 🔴 Pendiente del owner antes de desplegar el puente
 1. Crear el bot en **@BotFather** (`/newbot`), guardar el token en el gestor y **hablarle una vez** — un bot no puede escribir primero.
