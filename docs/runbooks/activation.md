@@ -57,6 +57,25 @@ Esperado: `url` = la de arriba, `pending_update_count` bajo, sin `last_error_mes
 
 ---
 
+## 2b. Puente Claude Code ↔ owner (owner, OPCIONAL — ADR 0012)
+
+Sin esto Jin funciona igual: el puente queda apagado y ninguna función del núcleo depende de él. Hacelo cuando quieras que una sesión de Claude Code corriendo en la VM pueda avisarte y preguntarte con botones por Telegram.
+
+**Es un bot SEPARADO del de la sección 2.** El chat de Jin es el canal de aprobaciones HITL; el de acá no tiene ninguna maquinaria de aprobación, ni siquiera por error (`Jin_Core/src/relay/relay.isolation.spec.ts`).
+
+1. Bot nuevo con `@BotFather` (`/newbot`) → `TELEGRAM_RELAY_BOT_TOKEN` a Infisical. **Hablale una vez** desde tu Telegram — un bot no puede escribir primero.
+2. `RELAY_TOKEN`: **aleatorio real** (`openssl rand -hex 32`) a Infisical. Es una credencial distinta del `TELEGRAM_WEBHOOK_SECRET` y del JWT de tu login: un token filtrado acá solo puede relayar mensajes, no aprobar nada ni leer el resto de la API.
+3. Ampliá el rol `jin-core-reader` con las dos claves nuevas — **verificalo en la base** (`psql` o el cliente que uses), la UI de Infisical v0.99 falla en silencio si el rol no las tiene.
+4. `jin-relay` (`Jin_Infra/scripts/relay/jin-relay`) corre **en el nodo**, no en tu Mac: `/api/relay` está bloqueado en el ingress público (`k8s/base/jin-core/ingressroute.yaml`). Copiá el `RELAY_TOKEN` a `~/.jin-relay-token` (permisos `600`) en la VM.
+
+Verificación, desde la VM:
+```bash
+scripts/relay/jin-relay send "puente activo"
+```
+Esperado: te llega en el chat del bot nuevo (no en el de Jin) segundos después. Si responde `503`, revisá que las dos claves estén en Infisical Y en el rol del paso 3.
+
+---
+
 ## 3. Google — Calendar y Gmail (owner)
 
 `jin-core` **no tiene un flujo OAuth interactivo**: usa `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` y un `GOOGLE_REFRESH_TOKEN` que obtenés una vez, afuera.
