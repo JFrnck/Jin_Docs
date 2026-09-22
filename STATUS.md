@@ -1,6 +1,6 @@
 # STATUS
 
-## Última actualización: 2026-09-21 (America/Lima) — actualización 29
+## Última actualización: 2026-09-22 (America/Lima) — actualización 30
 
 ## Sesión 2026-09-19 — deploy reanudado: código en `main`, VM lista hasta el gate de secretos
 
@@ -59,13 +59,25 @@ Una sesión de **Claude Code corriendo en la VM** puede avisarte y **preguntarte
 - **Desviación del plan aprobado:** las dos claves nuevas son **opcionales**, no requeridas — requerirlas dejaría el pod en CrashLoop por una función que no es del núcleo (lo que ya pasó con `INFISICAL_SITE_URL`). Un `refine` exige las dos juntas o ninguna.
 - **Tres fallos encontrados al implementar:** el `.refine()` colgado del schema del que `MigrationEnvSchema` hace `.pick()` hacía que zod lanzara **al importar** `env.schema.ts` (Core moría al arrancar; ni `tsc` ni los tests del módulo lo veían — lo destapó `generate:contract`); el bucle de long polling sobrevivía al apagado del módulo por no tener `onModuleDestroy`; y un `:id` sin validar salía como 500 en vez de 400.
 
-#### 🔴 Pendiente del owner antes de desplegar el puente
+**Desplegado en el clúster (2026-09-22):** `jin-core` repineado a la imagen con el puente (`5ff35d9a`), migración 0013 aplicada, `/api/relay` verificado bloqueado desde internet (403) y el resto de la API sigue sana (`/api/budget` → 401). Logs del pod nuevo confirman `RelayController` montado y `RelayBotService`: "Puente Claude↔owner deshabilitado (sin TELEGRAM_RELAY_BOT_TOKEN)" — exactamente lo esperado sin los secretos.
+
+#### 🔴 Pendiente del owner para ACTIVAR el puente (el código ya está en producción, apagado)
 1. Crear el bot en **@BotFather** (`/newbot`), guardar el token en el gestor y **hablarle una vez** — un bot no puede escribir primero.
 2. Generar el token: `openssl rand -hex 32`.
 3. Cargar `TELEGRAM_RELAY_BOT_TOKEN` y `RELAY_TOKEN` en Infisical (Production).
 4. Ampliar el rol `jin-core-reader` con esas dos claves, **verificándolo en la base** (la UI de v0.99 falla en silencio).
 
-Si no haces nada de esto, Jin sigue funcionando igual con el puente apagado.
+Sin esto Jin sigue funcionando exactamente igual — el puente ya está desplegado pero apagado.
+
+### ✅ Jin_Web — rediseño v4 Liquid Glass (2026-09-22)
+Entrega de Claude Design (`Jin/design/`) adaptada al dashboard real — [Jin_Web PR #9](https://github.com/JFrnck/Jin_Web/pull/9).
+
+**Corrige el bug reportado por el owner:** el nav inferior móvil solo exponía 4 de las 10 secciones (duplicaba las primeras 4 del sidebar) y ni esas 4 tenían fondo o marca de página activa — eran `NavLink` con estilo inline plano. Audit, Board, Apps, Memoria y Editor eran **inalcanzables desde el móvil**. Ahora: 4 fijas + hoja "Más" con las 5 restantes + Editor deshabilitado ("SOLO ESCRITORIO"). Verificado en vivo con el owner autenticado en el Browser pane.
+
+- Casi toda la lógica de negocio ya coincidía con lo que pedía el diseño v4 (dual-confirm, hold-to-unpause, countdown) — el cambio es sobre todo tokens de `app.css` + el nav nuevo (`NavItem.tsx`, `NavSheet.tsx`), sin dependencias nuevas.
+- **Hallazgo real al auditar `--sunken`:** se usaba como fondo opaco Y como borde a la vez en ~22 sitios; el borde translúcido de v4 los habría dejado casi invisibles. Se separó en `--sunken` (fondo) y `--hairline` (borde) nuevo.
+- **Bug encontrado por el CI, no por mí:** el `@media (...), not all and (backdrop-filter: ...)` copiado literal del mockup de Claude Design es CSS inválido — `backdrop-filter` no es una media feature, se detecta con `@supports`. `lightningcss` (el minificador de `pnpm build`) lo rechazaba; ni `dev` ni `typecheck`/`lint` lo corren, así que pasó desapercibido hasta el build real de CI. Separado en `@media (prefers-reduced-transparency)` + `@supports not (backdrop-filter)`.
+- Cambios estructurales reales solo en Login (fondo atmosférico), Overview (`PendingHero` nuevo, dos ramas reales), `ApprovalCard` (payload plegable, caja "influido por" en ámbar, relleno de progreso del dual-confirm sobre el botón), Budget y Audit (solo color). El resto hereda el cambio por las clases primitivas compartidas.
 
 ### 🟡 Abierto (decisiones de diseño de la Fase 9.5, no bloquean)
 - Preguntas de diseño de la Fase 9.5: cada SIGHUP con un override que baja el nivel crea una aprobación dual-confirm nueva sin deduplicar; el override solo se aplica en `AgentService` (no en `orchestrator.service.ts` ni en los `Google*ToolsService`).
