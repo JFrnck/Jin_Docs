@@ -20,8 +20,10 @@
   - Todo el código tipa contra el SDK del simulador de iOS 26.2.
   - **Prueba en vivo de `JinKit` contra Jin_Core local:** login (y contraseña incorrecta con intentos restantes), budget, autonomy, hitl/pending, audit, runs, bridge, 401 con token inválido, WS en `/` y `/chat`, ping/pong durante más de 30 s, un turno de chat que termina en `chat:error` y expulsión de un token inválido del WS.
   - Las dos únicas fallas fueron del entorno local: executor apagado (`preview-services` 500) y clave de OpenAI falsa (`recall` 502).
+- **Verificado en el simulador** (iPhone 17 Pro Max, iOS 26.3, contra Jin_Core local): build limpio, 35 tests de JinKit, y recorrida de todas las pantallas contra el diseño. Flujos de punta a punta: login y sesión persistente; aprobación nueva en tiempo real (badge y hero); **dual-confirm completo** (1/2 → número de 30 s del servidor → verificación del dispositivo → ejecutado en el servidor con `setBy: owner:dual-confirm`); rechazo; crear la aprobación desde Autonomía; banner de modo relajado y "Supervisar"; turno de chat por WS con el estado de caída.
+- **Bugs encontrados y corregidos en la recorrida:** el detalle de una aprobación ya ejecutada volvía a mostrar "Confirmar (2/2)" (test nuevo, verificado por mutación); el banner global tapaba el botón de volver; el nombre de la tool se truncaba en la tarjeta; coma decimal (`es_PE` usa punto); anclaje de scroll en Claude Code.
 - **Pendiente:**
-  - `xcodebuild` build + tests y la comparación visual en el simulador contra el diseño. Bloqueado porque Xcode se está reinstalando desde la App Store.
+  - Probar con datos que en local no hay: kill switch activo (hold de 3 s), un run de orquestación, apps corriendo y recall de memoria (necesitan executor, LLM y embeddings reales).
   - Crear el repo privado en GitHub, con confirmación del owner.
   - La tanda de endpoints "PRÓXIMAMENTE" en Jin_Core, widgets/Live Activity y que Jin_Web también mande `history`.
 
