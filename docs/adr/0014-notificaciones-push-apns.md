@@ -53,7 +53,7 @@ Este último solo se avisa si la app lo pidió (`notifyWhenDone`) y el socket ya
 - **Orquestación:** evento nuevo `orchestration.run.changed`, emitido en los puntos de mutación de `OrchestratorService`.
 - **Kill switch:** push-to-start, iOS 17.2+.
 - **`content-state`:** se arma en TypeScript igual que en Swift. Las fechas van en segundos desde 2001, porque ActivityKit usa el `JSONDecoder` por defecto.
-- Para que las dos implementaciones no se desincronicen, la fixture `Jin_Core/src/push/__fixtures__/orchestration-content-state.json` se valida en Jest y se decodifica en un test de Swift.
+- Para que las dos implementaciones no se desincronicen, la fixture `Jin_Core/src/push/__fixtures__/orchestration-content-state.json` se valida en Vitest y se decodifica en un test de Swift.
 
 ### Un solo sondeo del presupuesto
 
