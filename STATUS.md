@@ -9,7 +9,7 @@
 - **Jin_Core [#51](https://github.com/JFrnck/Jin_Core/pull/51)**: streaming del turno por WebSocket (`chat:progress`: plan, tools y texto del modelo en vivo). Su base es la rama de #50; **reapuntarla a `main` cuando #50 se mergee**.
 - **Jin_Web [#18](https://github.com/JFrnck/Jin_Web/pull/18)**: el chat del dashboard consume `chat:progress`. Esto reemplaza la nota "streaming de tokens no existe" de la sesión de Fase 6.
 
-### App nativa iOS — repo nuevo `Jin_iOS` (local, sin remoto todavía) — ADR 0013
+### App nativa iOS — repo nuevo [`Jin_iOS`](https://github.com/JFrnck/Jin_iOS) (privado) — ADR 0013
 - Brief: [`docs/IOS_DESIGN_BRIEF.md`](docs/IOS_DESIGN_BRIEF.md). Diseño del owner con Claude Design en `Jin/design_app_ios/`. Decisiones en [`docs/adr/0013-cliente-ios-nativo.md`](docs/adr/0013-cliente-ios-nativo.md).
 - Stack: SwiftUI, iOS 18+, Swift 6 estricto, **cero dependencias de terceros**. Lleva un cliente Socket.IO propio y el mismo Bearer que la CLI. **El backend no necesitó cambios.**
 - Pantallas del diseño completas:
@@ -22,8 +22,11 @@
   - Las dos únicas fallas fueron del entorno local: executor apagado (`preview-services` 500) y clave de OpenAI falsa (`recall` 502).
 - **Verificado en el simulador** (iPhone 17 Pro Max, iOS 26.3, contra Jin_Core local): build limpio, 35 tests de JinKit, y recorrida de todas las pantallas contra el diseño. Flujos de punta a punta: login y sesión persistente; aprobación nueva en tiempo real (badge y hero); **dual-confirm completo** (1/2 → número de 30 s del servidor → verificación del dispositivo → ejecutado en el servidor con `setBy: owner:dual-confirm`); rechazo; crear la aprobación desde Autonomía; banner de modo relajado y "Supervisar"; turno de chat por WS con el estado de caída.
 - **Bugs encontrados y corregidos en la recorrida:** el detalle de una aprobación ya ejecutada volvía a mostrar "Confirmar (2/2)" (test nuevo, verificado por mutación); el banner global tapaba el botón de volver; el nombre de la tool se truncaba en la tarjeta; coma decimal (`es_PE` usa punto); anclaje de scroll en Claude Code.
+- **Con datos sembrados en la base local** (y un executor falso en el scratchpad, borrados al terminar): kill switch activo → banner rojo → 1 s no reanuda, 3,6 s sí (`active=false` en la DB); run de orquestación con conflicto arriba, secciones por estado y el hilo del ticket; Apps con la hoja "NO CONFIABLE", Safari aislado y Detener con confirmación (`DELETE` al executor).
+- **Preparada para producción** (verificado contra el código desplegado `f71d7a17`): login con `accessToken` y `auth.token` en el WS ya están en producción. Como producción todavía no tiene Jin_Core#50, la app trata una respuesta vacía como refusal y no la mete al `history` (si no, el turno siguiente mandaría un mensaje de asistente vacío que la API rechaza).
 - **Pendiente:**
-  - Probar con datos que en local no hay: kill switch activo (hold de 3 s), un run de orquestación, apps corriendo y recall de memoria (necesitan executor, LLM y embeddings reales).
+  - Recall de Memoria con datos reales (necesita embeddings de OpenAI; el formato está cubierto por tests).
+  - El owner instala en su iPhone desde Xcode con su Apple ID (README de Jin_iOS).
   - Crear el repo privado en GitHub, con confirmación del owner.
   - La tanda de endpoints "PRÓXIMAMENTE" en Jin_Core, widgets/Live Activity y que Jin_Web también mande `history`.
 
