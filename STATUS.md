@@ -1,6 +1,26 @@
 # STATUS
 
-## Última actualización: 2026-09-26 (America/Lima) — actualización 32
+## Última actualización: 2026-09-26 (America/Lima) — actualización 33
+
+## Sesión 2026-09-26 (tarde) — desplegado #50–#53 + Web #18; notificaciones push listas y apagadas (ADR 0014)
+
+- **Desplegado en producción** (Infra [#42](https://github.com/JFrnck/Jin_Infra/pull/42)): jin-core `bb9473f3` y jin-web `62026e75`.
+  - Incluye el refusal explícito (#50), el streaming del turno por WS (#51), la fecha y hora en el prompt (#52) y la plantilla `static` de pods con tope de salida de 8000 (#53).
+  - `kubectl diff` mostró solo las dos imágenes. Postgres y Redis no se reiniciaron. `/health/ready` 200, `/api/budget` 401, socket.io responde.
+- **App iOS:** widgets de inicio "Esperan por ti" y "Gasto hoy" (diseño §9), con una foto sin token en un grupo de Keychain compartido.
+- **Notificaciones push — construidas, apagadas hasta pagar Apple Developer** (pedido del owner). ADR 0014; runbook [`docs/runbooks/apns-activation.md`](docs/runbooks/apns-activation.md).
+  - **Servidor — [Jin_Core#54](https://github.com/JFrnck/Jin_Core/pull/54):**
+    - cliente APNs propio (HTTP/2 + JWT ES256), migración 0014 y `/api/push/*`;
+    - 8 tipos de aviso; aprobaciones **sin acciones**;
+    - Live Activities por push (orquestación, kill switch);
+    - `BudgetAlertMonitor`.
+  - **App — [Jin_iOS#1](https://github.com/JFrnck/Jin_iOS/pull/1):** interruptor `JIN_PUSH`, `PushCoordinator` y la extensión `JinNotificationService`.
+  - **Verificado en el simulador:** permiso → token → registro, y un aviso de aprobación que abre la tarjeta.
+  - **Bugs encontrados y corregidos:** crash al tocar un aviso, respuesta perdida en segundo plano, tokens más largos que el tope.
+- **Pendiente:**
+  - mergear y desplegar Jin_Core#54 (con push apagado es inerte; aplica la migración 0014);
+  - reinstalar la app en el iPhone del owner (widgets + fixes);
+  - el día que haya cuenta, seguir el runbook de APNs.
 
 ## Sesión 2026-09-24/26 — chat que no respondía, streaming en vivo y app nativa iOS (Claude Code)
 
