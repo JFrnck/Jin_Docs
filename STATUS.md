@@ -1,6 +1,29 @@
 # STATUS
 
-## Última actualización: 2026-09-22 (America/Lima) — actualización 31
+## Última actualización: 2026-09-26 (America/Lima) — actualización 32
+
+## Sesión 2026-09-24/26 — chat que no respondía, streaming en vivo y app nativa iOS (Claude Code)
+
+### Chat: "Jin no respondía" — PRs abiertos, CI verde, pendientes de merge
+- **Jin_Core [#50](https://github.com/JFrnck/Jin_Core/pull/50)**: causa raíz reproducida. Cuando el proveedor rechazaba (refusal), el turno terminaba con `finalResponse` vacío y el owner no veía nada. Ahora nunca se reenvía un texto vacío y el refusal se dice explícitamente.
+- **Jin_Core [#51](https://github.com/JFrnck/Jin_Core/pull/51)**: streaming del turno por WebSocket (`chat:progress`: plan, tools y texto del modelo en vivo). Su base es la rama de #50; **reapuntarla a `main` cuando #50 se mergee**.
+- **Jin_Web [#18](https://github.com/JFrnck/Jin_Web/pull/18)**: el chat del dashboard consume `chat:progress`. Esto reemplaza la nota "streaming de tokens no existe" de la sesión de Fase 6.
+
+### App nativa iOS — repo nuevo `Jin_iOS` (local, sin remoto todavía) — ADR 0013
+- Brief: [`docs/IOS_DESIGN_BRIEF.md`](docs/IOS_DESIGN_BRIEF.md). Diseño del owner con Claude Design en `Jin/design_app_ios/`. Decisiones en [`docs/adr/0013-cliente-ios-nativo.md`](docs/adr/0013-cliente-ios-nativo.md).
+- Stack: SwiftUI, iOS 18+, Swift 6 estricto, **cero dependencias de terceros**. Lleva un cliente Socket.IO propio y el mismo Bearer que la CLI. **El backend no necesitó cambios.**
+- Pantallas del diseño completas:
+  - Acceso, Inicio, Aprobar (lista → detalle, número + candado de 30 s, Face ID en el 2/2), Chat con contexto (`history`/`compactedHistory`) y progreso en vivo.
+  - Gasto (con hold de 3 s para reanudar), Autonomía, Claude Code, Orquestación, Apps, Memoria, Audit, Ajustes y Más.
+  - Lo que el servidor aún no entrega está marcado "PRÓXIMAMENTE".
+- **Verificado:**
+  - Todo el código tipa contra el SDK del simulador de iOS 26.2.
+  - **Prueba en vivo de `JinKit` contra Jin_Core local:** login (y contraseña incorrecta con intentos restantes), budget, autonomy, hitl/pending, audit, runs, bridge, 401 con token inválido, WS en `/` y `/chat`, ping/pong durante más de 30 s, un turno de chat que termina en `chat:error` y expulsión de un token inválido del WS.
+  - Las dos únicas fallas fueron del entorno local: executor apagado (`preview-services` 500) y clave de OpenAI falsa (`recall` 502).
+- **Pendiente:**
+  - `xcodebuild` build + tests y la comparación visual en el simulador contra el diseño. Bloqueado porque Xcode se está reinstalando desde la App Store.
+  - Crear el repo privado en GitHub, con confirmación del owner.
+  - La tanda de endpoints "PRÓXIMAMENTE" en Jin_Core, widgets/Live Activity y que Jin_Web también mande `history`.
 
 ## Sesión 2026-09-22 — Jin_Web desplegado en la VM, accesible en jin.jeanfranck.com, PWA instalable
 
