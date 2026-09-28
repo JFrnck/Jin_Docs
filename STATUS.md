@@ -1,6 +1,19 @@
 # STATUS
 
-## Última actualización: 2026-09-28 (America/Lima) — actualización 34
+## Última actualización: 2026-09-28 (America/Lima) — actualización 35
+
+## Sesión 2026-09-28 (noche) — terminal, pods y vista previa en vivo: mergeado y DESPLEGADO
+
+- **Mergeado:** Jin_Executor #19, Jin_Infra #44 y #45 (repin), Jin_Core #56, Jin_Docs #17, Jin_iOS #2 y #3.
+- **Desplegado en la VM:** jin-core `c657826c`, jin-executor `b5164d62`, y lo nuevo de Infra: namespace `registry-proxy` con Verdaccio, `pods/exec` y `pods/proxy` en el Role del Executor, cuota de `agents-sandbox` 1000m/2Gi → 2000m/3Gi. Sin migración.
+  - `kubectl diff` mostró solo eso (2 Deployments, Verdaccio, 4 NetworkPolicy, Role, cuota). Postgres y Redis no se reiniciaron.
+  - Hubo que crear antes el namespace `registry-proxy` (`kubectl apply -f k8s/base/namespaces/namespaces.yaml`): `kubectl diff -k` falla si un namespace no existe todavía.
+- **Verificado en producción, desde la VM contra el Executor** (sin el JWT del owner): sesión abierta en 6 s; `ls` y `id -u` = 1000; `npm view left-pad` por el proxy; salida directa a internet bloqueada; `jin-core` bloqueado; servidor en segundo plano + `pods/proxy` con el Role real. La sesión de prueba se cerró sola y no quedó ningún pod.
+- **Hallazgos al llegar a CI y a producción:**
+  - dos tests de integración de Core esperaban el executor sin contexto (los corrí todos contra Postgres real: 120);
+  - `kubectl diff` con un namespace nuevo (arriba).
+- **No verificado en producción:** el flujo con el JWT del owner (abrir la sesión desde la app, aprobar, comandos). La app en el iPhone ya lo trae; hay que probarlo.
+- **Pendiente:** que el owner pruebe la terminal, Publicar, Pods y la vista previa en su iPhone; reintentar su pedido de pods para ver el `stopReason` en Loki; reinstalar la app antes del ~5 de octubre; revisión línea por línea de Core #56 (HITL/audit) y de Executor #19 (exec) que se mergearon por instrucción explícita del owner.
 
 ## Sesión 2026-09-28 — editor de código en el iPhone y "Publicar" sin pasar por el modelo (ADR 0015)
 
