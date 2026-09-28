@@ -46,6 +46,17 @@ El editor del iPhone (ADR 0015) publica sitios **estáticos**. El owner pidió p
 - Exportar el espacio de trabajo al editor (para que lo que generó `npm create vite` aparezca en el proyecto del iPhone): archivos de texto, sin `node_modules`, `.git` ni `dist`, con los mismos topes que Publicar (50 archivos, 256 KB).
 - Enviar el proyecto del editor a la sesión (al abrirla, y a pedido).
 
+### Vista previa en vivo de un servidor de la sesión
+
+Para ver una app que corre en un puerto (`npm run dev` en el 5173, un backend en el 3000) dentro de la app:
+
+- **Servidor en segundo plano:** se lanza en su propio grupo de procesos, con la salida a un archivo, y sobrevive al comando (el ejecutor de comandos sí mata todo al terminar). Se puede listar, ver su log y detener (se mata el grupo entero). Lanzarlo y detenerlo son un comando más del owner: quedan en el audit antes (fail-closed) y no piden aprobación, porque no exponen nada afuera.
+- **Camino privado, no un link público:** app → Core (`/api/terminal/sessions/:id/preview/:puerto/*`, con el JWT del owner) → Executor → API server (`pods/proxy`) → pod. La vista web de la app no conoce el token: un `WKURLSchemeHandler` nativo lo agrega a cada petición. No se reenvían cookies ni el JWT al servidor, ni `set-cookie` de vuelta; nunca se cachea.
+- **El Executor no alcanza los pods directamente** (su NetworkPolicy excluye los CIDRs del clúster): todo pasa por `pods/proxy`, con verbos acotados a `agents-sandbox`. La ruta se valida antes de tocar la red (sin `..`, ni escapado, ni barra invertida, ni caracteres de control) para que no pueda salir del prefijo del pod y llegar a otra ruta del API. El `Host` es `localhost:<puerto>` (Vite rechaza otros).
+- **Encontrado probando Vite de verdad:** el API server **reescribe los enlaces del HTML** (`src="/@vite/client"` sale como `/api/v1/namespaces/…/proxy/@vite/client`) y la página dejaba de funcionar. El Executor deshace esa reescritura (cuerpo HTML y `Location`).
+- **No se audita cada petición** (una página son decenas): lo que habilita la vista previa, el servidor, ya quedó en el audit.
+- **Limitaciones:** la recarga automática por WebSocket (HMR) no pasa (se recarga a mano con ↻); las redirecciones se siguen con una página que navega; las URL absolutas a `localhost` dentro de la app del owner no se traducen.
+
 ### Todos los pods, en una sola lista
 
 `Más → Pods` junta las apps publicadas (por un agente o desde el editor) y la sesión de terminal.
