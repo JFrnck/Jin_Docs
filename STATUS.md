@@ -1,6 +1,20 @@
 # STATUS
 
-## Última actualización: 2026-09-26 (America/Lima) — actualización 33
+## Última actualización: 2026-09-28 (America/Lima) — actualización 34
+
+## Sesión 2026-09-28 — editor de código en el iPhone y "Publicar" sin pasar por el modelo (ADR 0015)
+
+- **Pedido del owner:** resolver que un rechazo del proveedor le impida trabajar, porque lo más importante es levantar pods y servir links; activar el editor en el teléfono; gestionar archivos y carpetas; elegir tecnología al crear un proyecto.
+- **Jin_Core — [#55](https://github.com/JFrnck/Jin_Core/pull/55):** `POST /api/preview-services` con la misma puerta de HITL (`confirm` deja una aprobación `owner:api`; un modo relajado la ejecuta con audit y aviso). Tope de 50 archivos y 256 KB; el parser sube a 512 KB y sus 4xx dejan de salir como 500.
+- **Jin_iOS — editor nativo:** resaltado propio, autoindentado, pares y cierre de etiquetas, barra de teclas, números de línea. Árbol de archivos y carpetas (crear, renombrar o mover, duplicar, eliminar con confirmación). Plantillas: React + Tailwind, HTML/CSS/JS, Vue y en blanco.
+- **Verificado en el simulador** contra un Jin_Core local: publicar → aprobación pendiente → aprobar → "Publicada" con link. 93 + 11 tests.
+- **No se hace todavía:**
+  - Vite/npm: necesita un paso de build con salida al registro de npm. **Decisión de seguridad del owner.**
+  - Terminal: va después, con su propia ADR.
+- **Pendiente:**
+  - mergear y desplegar Jin_Core#55 (sin migración);
+  - mergear la app y reinstalarla en el iPhone;
+  - que el owner reintente el pedido de pods para ver `stopReason` en Loki.
 
 ## Sesión 2026-09-26 (tarde) — desplegado #50–#53 + Web #18; notificaciones push listas y apagadas (ADR 0014)
 
