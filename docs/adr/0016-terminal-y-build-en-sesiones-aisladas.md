@@ -46,6 +46,13 @@ El editor del iPhone (ADR 0015) publica sitios **estáticos**. El owner pidió p
 - Exportar el espacio de trabajo al editor (para que lo que generó `npm create vite` aparezca en el proyecto del iPhone): archivos de texto, sin `node_modules`, `.git` ni `dist`, con los mismos topes que Publicar (50 archivos, 256 KB).
 - Enviar el proyecto del editor a la sesión (al abrirla, y a pedido).
 
+### Todos los pods, en una sola lista
+
+`Más → Pods` junta las apps publicadas (por un agente o desde el editor) y la sesión de terminal.
+
+- **Auditar:** cada pod guarda la aprobación que lo originó (`jin.io/request-id`). Ese id lo pone **quien ejecuta** (`ToolExecutionContext`), nunca el payload, que puede escribir el modelo: un `requestId` dentro del payload se ignora o se rechaza. `GET /api/audit?requestId=` devuelve el rastro de esa acción. Los pods anteriores a este campo no tienen enlace.
+- **Editar:** "Al editor" copia los archivos de texto de un pod vivo a un proyecto nuevo (`GET /api/preview-services/:id/files`). Es una copia, con los mismos topes de Publicar, y **queda en el audit antes de leer** (fail-closed). El pod es código que escribió un agente: lo leído es un dato no confiable, y el programa que lo lee no sigue enlaces simbólicos ni sale del espacio de trabajo. Volver a publicar crea otro pod con otro link.
+
 ## Consecuencias
 
 - **Jin_Infra:** namespace `registry-proxy` con Verdaccio y sus `NetworkPolicy`, permiso `pods/exec` para el Executor, y la cuota de `agents-sandbox` (hoy `limits.cpu: 1000m`, que alcanza para **un** pod) sube para que una sesión y un preview convivan.
