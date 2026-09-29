@@ -21,6 +21,18 @@
   - probar el flujo completo (abrir/aprobar/reanudar un workspace real) una vez desplegado — no fue posible en este entorno porque ninguno de los 3 PRs está en producción todavía;
   - revisión línea por línea de HITL/audit (Jin_Core#57 toca `src/hitl` indirectamente vía el mismo `DualConfirmService`, pero no cambia su lógica — confirmar si aun así aplica AGENTS.md §2.1).
 
+## Sesión 2026-09-28 (noche, cont. 2) — elegir modelo/proveedor/esfuerzo para el chat: 2 PRs abiertos, sin desplegar
+
+- **Pedido del owner:** poder cambiar de proveedor (Anthropic/OpenAI/Gemini) y de modelo/esfuerzo para el chat, desde la app — hoy fijo por `config/models.yaml`.
+- **Decidido con el owner antes de escribir código** (2 preguntas, ambas por la opción recomendada): el selector cubre **todo el turno de chat** (`chat_conversational` — el mismo modelo contesta Y decide qué tools correr, hoy una sola llamada, partirlo hubiera sido mucho más trabajo sin pedido explícito); es un ajuste **global**, no por conversación (mismo criterio que Autonomía).
+- **Jin_Core — [#58](https://github.com/JFrnck/Jin_Core/pull/58):** `OpenAIProvider` nuevo (el SDK `openai` ya era dependencia, hoy solo para embeddings) — Chat Completions, tool-calling, `reasoning_effort`. `ModelEffort` vendor-agnóstico nuevo en `ModelCompletionRequest`; cada provider lo traduce a su mecanismo (Anthropic: `anthropicThinkingParams()` nuevo en `sampling.ts`, depende de la generación del modelo — adaptive thinking en Sonnet 5/Opus 4.7/4.8, `budget_tokens` clásico en Haiku 4.5, dimensionado para nunca violar la cota mínima de la API). `ChatModelPreferenceService`/`Controller` nuevos: preferencia global en Postgres (fila singleton, mismo patrón que `AutonomyService`), catálogo curado y config-driven (`config/models.yaml` → `chat_options`, no "todo modelo con precio"). `ModelRouterService` solo consulta la preferencia para `chat_conversational`, nunca para las demás tareas automáticas. Migración `0015` escrita a mano (la cadena de snapshots de drizzle-kit sigue rota). 24 tests nuevos + 911 de toda la suite, sin regresiones.
+- **Jin_iOS — [#5](https://github.com/JFrnck/Jin_iOS/pull/5):** pantalla nueva en Más → Ajustes → "Modelo del chat" (mismo look que Autonomía: filas tipo radio, esfuerzo con chips cuando el modelo lo soporta, "Volver al default"). `ChatModelStore` nuevo, mismo patrón que `AutonomyStore`. 5 tests nuevos + 142 existentes, sin regresiones; build completo y probado en el simulador sin crashear.
+- **No desplegado.** Los 2 PRs quedan abiertos, sin instrucción del owner de mergear. Son **independientes** entre sí y de los PRs de workspaces de terminal (#20/#57/#4/#19 de la sesión anterior) — ramas separadas desde `main`, sin archivos en común, se pueden mergear en cualquier orden respecto de esos.
+- **Pendiente:**
+  - que el owner revise y decida mergear;
+  - confirmar que la API key de OpenAI ya provisionada (usada hoy solo para embeddings en `src/memory/`) tiene acceso a los modelos de chat/razonamiento — no se pudo probar contra la API real en este entorno;
+  - `STATUS.md` va a necesitar un merge trivial de la numeración de "actualización" con el PR #19 (docs de workspaces de terminal), lo que merge segundo.
+
 
 ## Sesión 2026-09-28 (noche) — terminal, pods y vista previa en vivo: mergeado y DESPLEGADO
 
