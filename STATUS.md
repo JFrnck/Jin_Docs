@@ -1,6 +1,24 @@
 # STATUS
 
-## Última actualización: 2026-09-28 (America/Lima) — actualización 36
+## Última actualización: 2026-09-29 (America/Lima) — actualización 37
+
+## Sesión 2026-09-29 — selector de modelo, terminal interactiva, explorador de archivos y Claude Code en el pod
+
+- **Desplegado y en uso** (Core `6a9e9cb5`, Executor `216be9b1`, app instalada en el iPhone del owner):
+  - **Selector de modelo/proveedor/esfuerzo del chat** (Más → Ajustes → "Modelo del chat"): Claude Opus 5.5 / Sonnet 5.5 / Haiku 4.5, Gemini 3.1 Pro / 3.5 Flash y GPT-6 Astra / Sol / Luna. Ajuste global en Postgres (`chat_model_preference`, migración 0015). Fallos que aparecieron en producción y ya están corregidos: GPT-6 rechaza `reasoning_effort` con herramientas (el selector de esfuerzo no aparece para GPT-6); Haiku con esfuerzo mandaba `temperature` junto con thinking (400); Sonnet/Opus 5.5 (pensamiento siempre prendido) agotaban `max_tokens` y dejaban el plan sin actualizar (tope mínimo 16000 y mensaje propio). El aviso "espera aprobación" del chat ya se actualiza al resolverse.
+  - **Terminal interactiva (PTY)** con SwiftTerm (única dependencia de terceros de la app; excepción aprobada, versión exacta 1.11.2). Audit fail-closed por línea antes del Enter. Sesión que sobrevive 10 min a una desconexión. Detalle y limitaciones en la ampliación 2026-09-29 del ADR 0016.
+  - **Explorador y editor de archivos del pod** (menú de la terminal → "Archivos del pod…"), con detección de conflictos por sha256 y audit fail-closed de escribir/crear/borrar (ruta, nunca contenido).
+  - **Arreglos de la terminal** (errores nuestros, ver ADR 0016): permiso de PVC y `patch` sobre pods en el `Role` del Executor; caché de npm en el disco del proyecto (el pod se expulsaba por llenar `/tmp`).
+- **En PR, sin desplegar — Claude Code en el pod con la suscripción del owner (ADR 0017):** Jin_Infra#49 (proxy `claude-egress`, 38 pruebas), Jin_Executor#24, Jin_Core#63 y el PR de Jin_iOS. Orden de despliegue: Infra → Executor → Core → app.
+  - **Negociación con Antigravity (Jin_Infra es su área):** solo se **agregan** manifests nuevos (namespace `claude-egress`, su Deployment/Service y sus `NetworkPolicy`) y una línea en las dos `kustomization.yaml` de la base; no se modifica nada existente. **No verifiqué si Antigravity tiene trabajo activo en `Jin_Infra`:** si lo tiene, este PR (Jin_Infra#49) necesita su revisión. Revisar `network-policies/claude-egress.yaml` y `server.mjs`.
+  - **Antes de probar:** el owner corre `claude setup-token` en su Mac; el token se pega en la app ("Conectar Claude Code") y nunca pasa por la terminal ni por el audit. Sin clave de API ni Secret de Kubernetes.
+- **Pendiente:**
+  - probar de punta a punta en el iPhone (terminal interactiva, archivos del pod, Claude Code): el owner no había probado nada de esto al escribir estas líneas;
+  - **ajustar la allowlist del proxy** (`ALLOWED_HOSTS`) con la primera prueba real de Claude Code;
+  - confirmar que `OPENAI_API_KEY` en Infisical tiene acceso a modelos de chat (no se probó una llamada real a GPT-6);
+  - `Jin_Infra`: registrar en el repo las versiones de imagen que corren (Executor `216be9b1`, Core `6a9e9cb5`); la copia de la VM tiene los pines editados sin commitear;
+  - `contracts/openapi.json` del Executor no se puede regenerar en el entorno del agente; la CI solo ejecuta el comando, no compara el archivo;
+  - el modelo por defecto de las tareas automáticas (`profiles` de `config/models.yaml`) sigue siendo la versión anterior; solo el selector del chat usa los modelos nuevos (decisión deliberada).
 
 ## Sesión 2026-09-28 (noche, cont.) — workspaces persistentes por proyecto (ADR 0016 ampliada): 3 PRs abiertos, sin desplegar
 

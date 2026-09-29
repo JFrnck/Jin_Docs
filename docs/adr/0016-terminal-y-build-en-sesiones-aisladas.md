@@ -15,14 +15,14 @@ El editor del iPhone (ADR 0015) publica sitios **estáticos**. El owner pidió p
 - **Sesión:** un pod de larga vida en `agents-sandbox` (imagen `node:22-alpine`, sin root, PSA `restricted`, sin token de ServiceAccount) que solo espera comandos. Tiene TTL (1 h por defecto, tope 4 h), lo destruye el reaper, y hay **una sola** a la vez.
 - **Espacio de trabajo:** `emptyDir` (no el PVC compartido `pnpm-store`, para que un paquete malicioso no envenene la caché de otros pods).
 - **Comandos:** el Executor los ejecuta con la API `exec` de Kubernetes, uno por vez, con `timeout` (120 s por defecto, tope 600 s) y tope de salida (512 KB). Cada comando corre en una shell nueva; el directorio actual se conserva entre comandos con un archivo en `/tmp`, para que `cd` funcione.
-- **No es una terminal interactiva (PTY).** No hay `vim`, `top` ni programas que pidan teclas. Es un ejecutor de comandos con salida en vivo: cubre `npm create vite`, `npm install`, `npm run build`, `ls`, `cat`, `node`. Es mucho más chica y segura que un PTY, y en un teléfono es más usable.
+- **(Superado el 2026-09-29: ver "Ampliación 2026-09-29" abajo, que agrega una terminal interactiva con PTY.)** Este modo, un comando por vez con salida en vivo, se conserva como "Comandos" y lo siguen usando los servidores en segundo plano, la vista previa y los archivos. Cubre `npm install`, `npm run build`, `ls`, `cat`, `node`; no cubre programas que piden teclas (`npm create vite` sin flags, `vim`, un asistente).
 
 ### La única salida de red es un proxy de npm dentro del clúster
 
 - Un **Verdaccio** propio (namespace `registry-proxy`) que solo habla con el registro de npm. Los pods de terminal solo pueden salir a ese servicio (una `NetworkPolicy` por sesión, creada por el Executor) y a DNS. Ningún otro destino de internet.
 - El proxy no acepta publicar ni registrar usuarios.
 - Un `postinstall` de un paquete corre dentro del pod aislado y solo alcanza el proxy.
-- **Riesgo residual, aceptado:** el proxy es un canal de exfiltración de ancho de banda mínimo (pedir un paquete cuyo nombre codifica datos). Lo que hay en el pod es el proyecto del propio owner, sin secretos: los pods no reciben variables de entorno ni tokens.
+- **Riesgo residual, aceptado:** el proxy es un canal de exfiltración de ancho de banda mínimo (pedir un paquete cuyo nombre codifica datos). Lo que hay en el pod es el proyecto del propio owner, sin secretos: los pods no reciben variables de entorno ni tokens. (Excepción opt-in por sesión desde 2026-09-29: Claude Code, con su propio proxy y un token del owner dentro del pod; ver ADR 0017.)
 - Alternativas descartadas: abrir egreso por CIDR de una CDN (frágil e inseguro) y un DNS/egress FQDN (necesita otro CNI).
 
 ### El modelo no tiene terminal
@@ -74,7 +74,7 @@ Para ver una app que corre en un puerto (`npm run dev` en el 5173, un backend en
 
 ## Fuera de esta tanda
 
-- Terminal interactiva con PTY.
+- ~~Terminal interactiva con PTY.~~ (Hecho el 2026-09-29, ver la ampliación.)
 - Que el modelo use la terminal.
 - Vite en modo desarrollo (`vite dev` con recarga): servir un servidor de desarrollo detrás del ingress necesita `allowedHosts` y HMR por WebSocket.
 
@@ -192,3 +192,51 @@ lógica de negocio):
 - Migrar sesiones que ya existían antes de esta ampliación (no había
   ninguna corriendo al desplegar: el `emptyDir` anterior no tenía nada
   que preservar).
+
+## Ampliación (2026-09-29): terminal interactiva, explorador de archivos y caché en el disco
+
+Tras usar la terminal en el iPhone el owner pidió tres cosas: una terminal **interactiva** (`npm create vite@latest` pregunta el nombre del proyecto; el modo de un comando por vez no puede), poder **ver y editar los archivos del pod**, y que la terminal **no se cayera**. Además, un incidente reveló dos errores de despliegue nuestros (abajo).
+
+### Terminal interactiva (PTY)
+
+```
+iPhone (SwiftTerm) ⇄ socket.io /terminal ⇄ Jin_Core ⇄ HTTP ⇄ Jin_Executor ⇄ K8s pods/exec (tty:true) ⇄ sh en /workspace
+```
+
+- **Executor:** solo transporta bytes (`TerminalPtyService`, `K8sService.openPty`), una sesión por workspace, con tamaño en vivo (resize), topes (64 KB por mensaje de teclado, 15 min sin actividad, cierre si el consumidor no da abasto) y anotación de actividad para que el reaper no libere un pod en uso.
+- **Core:** dueño del audit, la auth (JWT como `/chat`), los topes (512 KB/s de entrada) y la reconexión: guarda 256 KB de salida y mantiene la sesión **10 minutos** sin app conectada; `pty:open` sobre un workspace con sesión viva se engancha en vez de abrir otra. iOS se suspende seguido; sin esto un `npm install` largo moría al minimizar.
+- **iOS:** SwiftTerm como emulador. **Es la única dependencia de terceros de la app** (excepción a AGENTS.md §1.1 aprobada por el owner; solo en `JinUI`, versión exacta 1.11.2, sin shaders de Metal ni plugin de compilación). La salida del pod es texto **no confiable**: el delegado ignora portapapeles (OSC 52), enlaces (OSC 8), título e iTerm (OSC 1337), con tests.
+- **Audit (lo que cambió respecto de "cada comando se audita antes de ejecutarse").** Con un TTY no hay comandos, hay teclas. `PtyInputGate` reconstruye la línea que teclea el owner (borrar, Ctrl+U/W/C, salta secuencias de escape) y Core la registra (`runTerminalCommand`, mismo actor y formato) **antes de reenviar su Enter**; si el registro falla, el Enter no llega al shell y la línea se cancela con Ctrl+C. Abrir y cerrar la sesión se auditan (`openTerminalPty`, `closeTerminalPty`). **Limitación aceptada:** dentro de un programa a pantalla completa o de un asistente, las líneas se registran igual pero sin saber a qué pregunta responden; Tab (autocompletar) y el historial con flechas no se reflejan en la línea auditada.
+- **Aprobación:** sin cambios. Abrir el pod ya exige `confirm` fijo; la terminal interactiva es un canal dentro de ese pod. Las tools nuevas son virtuales (el modelo no las ve).
+
+### Explorador y editor de archivos del pod
+
+- Rutas `fs/list`, `fs/file`, `fs/dir`, `fs/entry` sobre el disco real del proyecto, **un archivo de texto a la vez (≤ 512 KB)**. `FS_SCRIPT` corre dentro del pod y valida cada ruta con `realpath` (ni `..` ni una carpeta que sea enlace hacia afuera pueden salir de `/workspace`); nunca sigue enlaces simbólicos; solo UTF-8; escritura atómica que conserva el modo.
+- **Conflictos:** guardar manda el `sha256` que se leyó; si el archivo cambió en el pod (un comando, Claude Code) el servidor responde 409 y la app ofrece recargar, sobrescribir o seguir editando, sin perder lo tecleado.
+- **Audit:** guardar, crear carpeta y borrar se auditan **antes** (fail-closed) con el hash de la **ruta**, nunca el contenido. Leer y listar no.
+- Se conserva "Traer archivos al proyecto" (copia hasta 50 archivos / 256 KB al editor local).
+
+### Dos errores de despliegue nuestros (para no repetirlos)
+
+1. **RBAC olvidado.** Los workspaces persistentes (PR del 2026-09-28) usan PVCs y anotan actividad en el pod, pero el `Role` del Executor no tenía `persistentvolumeclaims` ni `patch` sobre `pods`: la terminal daba 502 y el reaper podía liberar un pod en uso. Cada verbo nuevo de la API de Kubernetes que use el Executor tiene que ir en `Jin_Infra/k8s/base/executor/role.yaml` **en el mismo cambio**.
+2. **Caché de npm en un `emptyDir` de 512 Mi.** `npm install` de Vite lo llenaba y el kubelet **expulsaba el pod** ("EmptyDir volume tmp exceeds the limit"). Ahora `npm_config_cache` y `XDG_CACHE_HOME` viven en el PVC del proyecto (sobreviven al pod y aceleran reinstalls; `.cache` no se exporta al editor).
+
+### Bugs que encontraron los tests con directorios y K3s reales
+
+- `process.exit()` antes de vaciar el pipe **cortaba la salida en 64 KB**: leer un archivo grande daba JSON truncado.
+- Una carrera al reservar el workspace: dos aperturas casi simultáneas pasaban las dos (en Executor y en Core).
+- Un test que leía el portapapeles colgaba la suite de iOS (iOS pide permiso para leerlo).
+
+### Consecuencias
+
+- **Jin_Executor:** módulo `terminal` con PTY, `FS_SCRIPT` y las nuevas rutas; `K8sService.openPty`.
+- **Jin_Core:** gateway `/terminal`, `TerminalPtyService`, `PtyInputGate`, rutas `fs/*` y su audit.
+- **Jin_iOS:** pantalla de terminal con SwiftTerm, "Archivos del pod", `TerminalPtyStore`, `PodFilesStore`.
+- **Jin_Infra:** `Role` con `persistentvolumeclaims` y `patch` sobre `pods`.
+
+### Fuera de esta ampliación
+
+- Varias pestañas de terminal por workspace (una PTY por workspace).
+- Que el modelo use la terminal.
+- Subir/bajar archivos binarios o mayores de 512 KB desde el explorador; renombrar/mover; borrado recursivo.
+
