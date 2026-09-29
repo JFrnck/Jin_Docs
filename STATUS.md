@@ -1,6 +1,26 @@
 # STATUS
 
-## Última actualización: 2026-09-28 (America/Lima) — actualización 35
+## Última actualización: 2026-09-28 (America/Lima) — actualización 36
+
+## Sesión 2026-09-28 (noche, cont.) — workspaces persistentes por proyecto (ADR 0016 ampliada): 3 PRs abiertos, sin desplegar
+
+- **Pedido del owner:** no levantar 3 pods a la vez, pero poder tener hasta
+  ~10 proyectos guardados (dependencias, archivos) con solo 1-3 pods
+  corriendo a la vez. Propuso "cron sleep" por pod; se explicó por qué no
+  sirve (K8s reserva por `request`, no por uso real) y se acordó la
+  alternativa correcta: un `PersistentVolumeClaim` por proyecto que
+  sobrevive a que su pod se destruya, con el pod creado bajo demanda.
+  Detalle de diseño completo: [`docs/adr/0016-terminal-y-build-en-sesiones-aisladas.md`](docs/adr/0016-terminal-y-build-en-sesiones-aisladas.md) (sección "Ampliación 2026-09-28").
+- **Jin_Executor — [#20](https://github.com/JFrnck/Jin_Executor/pull/20):** `/terminal/sessions` → `/terminal/workspaces`; PVC por proyecto (`local-path`, `ReadWriteOnce`, 3Gi); `stopPod()` (disco intacto) y `deleteWorkspace()` (pod + disco, irreversible) separados; reaper solo toca pods. 4 bugs reales encontrados con K3s vía testcontainers (no con mocks): pod terminando seguía aceptando `exec`; PVC borrado seguía listado; 409 al recrear un pod que aún terminaba de irse; `createdAt` inestable entre crear y reanudar. Los 4, corregidos y con test de regresión. 193 tests unitarios + 6 de integración contra K3s real, todos verdes.
+- **Jin_Core — [#57](https://github.com/JFrnck/Jin_Core/pull/57):** adapta `TerminalExecutorClient`/`OwnerTerminalService`/`TerminalController` al nuevo contrato. Nivel de aprobación SIN CAMBIOS (`confirm` fijo para abrir/reanudar y publicar); el chequeo de conflicto pasa de "una sola sesión en todo Jin" a "por workspace" (varios proyectos pueden correr a la vez). `deleteTerminalWorkspace` nueva, solo audit (mismo criterio que `stopTerminalSession`). 52 tests del módulo + 887 de toda la suite, sin regresiones.
+- **Jin_iOS — [#4](https://github.com/JFrnck/Jin_iOS/pull/4):** `TerminalStore` deja de modelar una sesión global y pasa a estado por workspace (keyed por el `UUID` del proyecto); `TerminalView(projectId:)` deja de ser opcional. El atajo "Terminal" en Más y la sección de terminal en Pods se adaptan (Pods ahora lista TODOS los workspaces, no solo uno). Encontrado y corregido: un bug de optional-chaining silencioso en `stopPod()` que perdía el aviso en pantalla. 137 + 11 tests verdes; build completo del target `Jin` sin errores; probado en el simulador sin crashear (sin servidor real que probar el flujo completo todavía).
+- **No desplegado.** El owner no ha dado la instrucción de mergear; los 3 PRs quedan abiertos, en ese orden de dependencia (Executor primero, Core después, iOS al final — cada uno depende del contrato del anterior).
+- **Pendiente:**
+  - que el owner revise y decida mergear (y en qué orden desplegar: Executor → Core → iOS);
+  - no se pudo regenerar `contracts/openapi.json` de Jin_Executor en este entorno (el bootstrap completo de `AppModule` necesita config/infra local que no estaba disponible) — revisar antes de mergear si el contrato importa para algún consumidor externo;
+  - probar el flujo completo (abrir/aprobar/reanudar un workspace real) una vez desplegado — no fue posible en este entorno porque ninguno de los 3 PRs está en producción todavía;
+  - revisión línea por línea de HITL/audit (Jin_Core#57 toca `src/hitl` indirectamente vía el mismo `DualConfirmService`, pero no cambia su lógica — confirmar si aun así aplica AGENTS.md §2.1).
+
 
 ## Sesión 2026-09-28 (noche) — terminal, pods y vista previa en vivo: mergeado y DESPLEGADO
 

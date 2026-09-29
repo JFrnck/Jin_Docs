@@ -76,5 +76,119 @@ Para ver una app que corre en un puerto (`npm run dev` en el 5173, un backend en
 
 - Terminal interactiva con PTY.
 - Que el modelo use la terminal.
-- Varias sesiones a la vez.
 - Vite en modo desarrollo (`vite dev` con recarga): servir un servidor de desarrollo detrás del ingress necesita `allowedHosts` y HMR por WebSocket.
+
+## Ampliación (2026-09-28): un workspace por proyecto, con disco propio
+
+### Contexto
+
+"Varias sesiones a la vez" quedó fuera de la tanda original, pero el owner
+pidió después poder tener hasta ~10 proyectos guardados (dependencias
+instaladas, archivos tal como quedaron) sin que eso signifique 10 pods
+corriendo: la VM (2 vCPU/12GB, Oracle Always Free) no da para eso, y
+tampoco es lo que quería — solo 1-3 pods activos a la vez, el resto
+"apagados pero guardados".
+
+La primera idea del owner fue un cron que duerma cada pod. No sirve:
+Kubernetes reserva CPU/memoria por el `request` del pod, no por su uso
+real — un pod dormido sigue ocupando su cupo en la `ResourceQuota`. La
+solución correcta es separar **disco** de **cómputo**.
+
+### Decisión: `PersistentVolumeClaim` por proyecto, pod bajo demanda
+
+- **Disco:** un PVC (`local-path`, `ReadWriteOnce`, 3Gi por defecto) por
+  proyecto, nombrado `terminal-ws-<workspaceId>`. `workspaceId` es el
+  mismo id que el proyecto tiene en el editor del iPhone (`CodeProject.id`,
+  un UUID) — nombra el disco Y el pod, así que se valida con el mismo
+  regex de UUID en las tres puntas (Executor, Core, y de origen en la
+  app) antes de tocar cualquier nombre de recurso de Kubernetes.
+- **Pod:** se crea al abrir el proyecto (o al reanudarlo) y se destruye al
+  cerrar o por inactividad (`TERMINAL_IDLE_TIMEOUT_SECONDS`, 30 min por
+  defecto) — el disco **nunca** se toca al destruir el pod.
+- **Tope de proyectos con disco:** `TERMINAL_MAX_WORKSPACES` (10 por
+  defecto); el tope de pods corriendo a la vez sigue siendo
+  `TERMINAL_MAX_CONCURRENT` (independiente — es la cuota de la VM la que
+  manda ahí, ajustable sin tocar código).
+- **`status: 'stopped'`** (disco sin pod) es el reposo normal de un
+  proyecto, no un error. `list()` ahora devuelve todos los workspaces del
+  owner, corriendo o no.
+
+### HITL: sin cambios de nivel, ampliado a "por workspace"
+
+Crear un pod con salida al proxy de npm es el mismo riesgo exista o no ya
+el disco del proyecto — no hay razón de seguridad para tratar "reanudar"
+distinto de "abrir por primera vez". **`startTerminalSession` (ahora
+`start`/reanudar de un workspace) sigue en `confirm` fijo**, sin que
+ningún modo de autonomía lo relaje, igual que antes. El chequeo de
+conflicto que antes bloqueaba abrir CUALQUIER sesión si había una sola
+viva en todo Jin ahora es **por workspace**: varios proyectos pueden
+tener su pod corriendo a la vez (hasta `TERMINAL_MAX_CONCURRENT`).
+
+Dos acciones nuevas, **solo audit, sin aprobación** — igual que ya era
+`stopTerminalSession`, porque ninguna abre egress nuevo, solo destruyen
+datos que ya son del owner:
+
+- **Detener el pod** (`stopTerminalSession`): el disco se conserva.
+- **Borrar el workspace** (`deleteTerminalWorkspace`, nueva): pod (si lo
+  hay) + disco. Irreversible. Es la única acción de esta ampliación que
+  de verdad destruye algo sin vuelta atrás.
+
+### El reaper de inactividad solo toca pods, nunca discos
+
+`TerminalReaperService` sigue liberando pods vencidos o inactivos (mismo
+mecanismo de antes), pero ahora explícitamente **nunca** borra un PVC —
+eso solo pasa por `deleteWorkspace`, una acción del owner.
+
+### 4 bugs reales, encontrados con un K3s real (testcontainers), no con mocks
+
+El Executor ya tenía tests de integración contra un K3s real
+(`rancher/k3s` vía testcontainers) desde la tanda original; en esta
+ampliación encontraron 4 bugs que los mocks no hubieran mostrado nunca,
+todos sobre el ciclo de vida real de los objetos de Kubernetes (no sobre
+lógica de negocio):
+
+1. Un pod al que ya se le pidió borrarse sigue reportando `phase: Running`
+   durante su `terminationGracePeriodSeconds` — `exec()` seguía
+   funcionando contra un pod que ya se había pedido destruir. Fix:
+   clasificarlo como `'failed'` en cuanto tiene `deletionTimestamp`, antes
+   de mirar `phase`.
+2. Un PVC recién borrado sigue listado hasta que su finalizer de
+   protección se libera (el pod que lo usaba tiene que terminar de irse
+   primero). Fix: `list()` filtra PVCs con `deletionTimestamp`, igual que
+   ya hacía con pods.
+3. Consecuencia directa del fix #1: al reclasificar un pod terminando
+   como `'failed'`, el flujo de reanudar intentaba recrear el pod con el
+   mismo nombre mientras el anterior seguía "Terminating" de verdad en
+   etcd → 409 `AlreadyExists`. Fix: esperar (con tope) a que el pod
+   desaparezca de verdad antes de recrear.
+4. `createdAt` no era estable: al crear un workspace se guardaba con el
+   reloj propio (milisegundos); al reanudarlo se leía del
+   `creationTimestamp` real de Kubernetes (sin milisegundos) — el mismo
+   disco reportaba dos `createdAt` distintos según cuándo se preguntara.
+   Fix: siempre se usa el `creationTimestamp` real que devuelve la API al
+   crear el PVC, nunca el reloj local.
+
+### Consecuencias
+
+- **Jin_Infra:** sin cambios de manifest más allá de lo que ya existía
+  (el `StorageClass local-path` ya es el default del clúster). El tope
+  real de espacio de los PVCs sigue viviendo en la `ResourceQuota` de
+  `agents-sandbox` (defensa en profundidad, el owner ya lo ve en la app).
+- **Jin_Executor:** `/terminal/sessions` → `/terminal/workspaces`;
+  `TerminalService` → `TerminalWorkspaceService`.
+- **Jin_Core:** `/api/terminal/sessions` → `/api/terminal/workspaces/
+  {workspaceId}/...`; `OwnerTerminalService.requestSession()` →
+  `requestStart(workspaceId, ...)`.
+- **Jin_iOS:** `TerminalStore` deja de modelar "una sesión global" y pasa
+  a estado por workspace (transcript, historial, servidores, aprobaciones
+  pendientes, todo keyed por el `UUID` del proyecto); `TerminalView` deja
+  de aceptar un proyecto opcional — cada terminal es siempre la de un
+  proyecto concreto.
+
+## Fuera de esta ampliación
+
+- Un límite de espacio por owner visible en la app (hoy solo se ve por
+  proyecto individual, vía la `ResourceQuota`).
+- Migrar sesiones que ya existían antes de esta ampliación (no había
+  ninguna corriendo al desplegar: el `emptyDir` anterior no tenía nada
+  que preservar).
