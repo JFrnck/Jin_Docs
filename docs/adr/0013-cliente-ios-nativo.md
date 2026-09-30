@@ -100,7 +100,7 @@ Se construye con su diseño y la etiqueta "PRÓXIMAMENTE":
 - tokens por turno;
 - gasto por hora y por modelo;
 - contador del freno de autonomía;
-- estado de la sesión de Claude Code;
+- ~~estado de la sesión de Claude Code~~ (descartado 2026-09-30: la sesión de la VM se usa por Remote Control desde la app de Claude; la pestaña Más → Claude Code se quitó);
 - estado de la cadena y resultado de la ejecución en Audit;
 - notificaciones push.
 
