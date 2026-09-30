@@ -1,6 +1,12 @@
 # STATUS
 
-## Última actualización: 2026-09-29 (America/Lima) — actualización 37
+## Última actualización: 2026-09-30 (America/Lima) — actualización 38
+
+## Sesión 2026-09-30 — Claude Code de la VM por Remote Control; se quita la pestaña de la app
+
+- **Decisión del owner:** la sesión de Claude Code que corre **en la VM** se usa desde la **app nativa de Claude** con Remote Control (`claude remote-control`, solo HTTPS de salida, suscripción del owner). Se **descarta** integrarla como terminal en la app de Jin (SSH + tmux + audit): duplicaría lo que la app de Claude ya da.
+- **App iOS:** se quita **Más → Claude Code** (pantalla, bandeja del puente, `BridgeStore` y su sondeo). El servidor no cambia: `/api/relay`, `/api/bridge` y el puente de Telegram (ADR 0012) siguen existiendo; la respuesta desde un aviso push sigue soportada (`bridgeReply`, hoy sin push activo). La frontera de ADR 0012 ("Jin no lanza Claude Code") no cambia.
+- **Terminal (Claude Code en el pod):** tiempo de espera sin la app elegible en la app (10 min–4 h, 1 h por defecto; `pty:open {keepAliveMinutes}` y `pty:keepalive`; espera de silencio en Core), inactividad del Executor a 4 h y la sesión abierta cuenta como pod en uso; imagen de los pods Debian (`node:22-bookworm`, con bash y git) porque Claude Code exige bash; scroll con el dedo traducido a rueda de ratón en la pantalla alternativa (Jin_iOS#11).
 
 ## Sesión 2026-09-29 — selector de modelo, terminal interactiva, explorador de archivos y Claude Code en el pod
 
