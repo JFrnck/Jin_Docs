@@ -1,6 +1,17 @@
 # STATUS
 
-## Última actualización: 2026-09-30 (America/Lima) — actualización 38
+## Última actualización: 2026-10-02 (America/Lima) — actualización 39
+
+## Sesión 2026-10-02 — demos con backend, base de datos elegible y vida de hasta 7 días
+
+- **Desplegado y verificado en producción** ([ADR 0018](docs/adr/0018-demos-con-backend-y-base-de-datos.md)): `extendPreviewService` (renovar hasta 7 días desde la creación, con aprobación), `mailEgress` en el pedido, `template: "node"` (npm por Verdaccio, `ignore-scripts` siempre) y `db: sqlite | redis | postgres | mongodb` (contenedor auxiliar nativo con contraseña aleatoria). Imágenes: Executor `2ed7c2bb`, Core `6a431504`; cuota de `agents-sandbox` en 3000m / 6 Gi; imágenes de las bases pre-descargadas en el nodo (`scripts/bootstrap/09-prepull-demo-db.sh`).
+- **Verificación real** (K3s ARM64 y producción): Redis, PostgreSQL y MongoDB aceptan escritura y lectura con la contraseña de la demo. Hallazgos corregidos: PostgreSQL no exigía contraseña desde 127.0.0.1; MongoDB tenía un hueco de conexión (sondeo en el `mongod` temporal); la cuota agotada daba un 500 opaco (ahora 429 con números y sin recursos huérfanos).
+- **Límite real:** la CPU de la VM (2 vCPU). Una demo con PostgreSQL/MongoDB pide 1500m de límite; con `sistema-reservas` cabe una a la vez.
+- **Jin_Infra:** `mail-egress` (proxy de correo, `api.brevo.com:443`) quedó registrado en git (#51) tras haberse aplicado a mano desde la sesión de Claude Code de la VM; el árbol de la VM quedó igual a `main`. Nota de seguridad abierta, sin prisa: la NetworkPolicy `allow-https-public-egress` de `mail-egress` permite `0.0.0.0/0` sin excluir rangos privados (el proxy ya rechaza IPs privadas).
+- **Terminal:** `deleteWorkspace` ya no da éxito con el disco todavía ahí (`deletePvcOrThrow` comprueba y reintenta); el CI del Executor tenía tests de integración intermitentes (borrado de workspace y tamaño del PTY), corregidos.
+- **iPhone:** la tarjeta de cada app muestra su base de datos; la barra de vida escala a 7 días.
+- **Pendiente:** integración con git y hosting permanente de demos (ADR aparte); secretos por demo.
+
 
 ## Sesión 2026-09-30 — Claude Code de la VM por Remote Control; se quita la pestaña de la app
 
