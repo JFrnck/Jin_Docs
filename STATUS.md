@@ -1,6 +1,13 @@
 # STATUS
 
-## Última actualización: 2026-10-02 (America/Lima) — actualización 39
+## Última actualización: 2026-10-04 (America/Lima) — actualización 40
+
+## Sesión 2026-10-04 — variables de entorno por demo (PRs abiertos, nada desplegado)
+
+- **[ADR 0020](docs/adr/0020-variables-de-entorno-por-demo.md):** el owner las escribe en la hoja Publicar de la app; Core guarda los valores solo en RAM; el Executor crea el Secret `demo-env-<id>` con `ownerReference` al pod (se borra con la demo) y el pod no lo muestra en su spec. Probado en K3s real.
+- **PRs abiertos, ninguno mergeado ni desplegado:** Jin_Infra#58 (RBAC `secrets: create/patch/delete` — **requiere autorización explícita del owner**), Jin_Executor#35, Jin_Core#70, Jin_iOS#14. Orden: Infra → Executor → Core → app (`kubectl diff` antes de aplicar).
+- **Pendiente del owner:** crear `demo-secret-brevo` (o usar el flujo nuevo cuando esté desplegado), repo `jin-demos` + GitHub App + claves en Infisical, renovar el token de Canvas, liberar disco del Mac, renovar `sistema-reservas` (vence 2026-10-10), reinstalar la app iOS (perfil vence ≈ 2026-10-11), decidir nombres de demo limpios.
+- **No construido:** `requiredEnv` (que Jin pida variables desde el chat sin ver el valor).
 
 ## Sesión 2026-10-02 — demos con backend, base de datos elegible y vida de hasta 7 días
 
