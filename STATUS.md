@@ -1,6 +1,14 @@
 # STATUS
 
-## Última actualización: 2026-10-04 (America/Lima) — actualización 40
+## Última actualización: 2026-10-05 (America/Lima) — actualización 41
+
+## Sesión 2026-10-05 — rediseño de proyectos del editor (PRs abiertos, sin desplegar)
+
+- **[ADR 0021](docs/adr/0021-configuracion-persistente-y-respaldos-de-proyectos.md):** la configuración de publicación se recuerda por proyecto (valores de variables en el Llavero del iPhone), Node (npm) es el tipo por defecto, los archivos que parecen secretos ya no se publican ni se respaldan, y hay **Más → Proyectos respaldados** para ver/restaurar/borrar.
+- **Causa de las claves "que nunca se aplicaban":** un `.env` en el proyecto viajaba como archivo público (clave de Brevo expuesta 2 veces, rotada) y nada lo leía como variable.
+- **PRs:** Executor#36, Core#71/#72/#73, iOS#16/#17, Docs (este). **Core#72 trae la migración 0016.**
+- **Incidente de la sesión:** un comando mío imprimió el Secret TLS del comodín `*.jinserver.com`; el owner borró los dos Secrets y cert-manager emitió claves nuevas (los dos Certificates chocaron en DNS-01 y hubo que recrearlos de uno en uno).
+- **Pendiente:** Fase 3 (datos de la demo) y Fase 4 (GitHub); `sistema-reservas` vive hoy dentro de una terminal expuesta (vence 2026-10-06 00:56 UTC) con Brevo configurado a mano por la otra sesión de Claude Code.
 
 ## Sesión 2026-10-04 — variables de entorno por demo (PRs abiertos, nada desplegado)
 
