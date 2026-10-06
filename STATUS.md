@@ -1,6 +1,14 @@
 # STATUS
 
-## Última actualización: 2026-10-05 (America/Lima) — actualización 41
+## Última actualización: 2026-10-06 (America/Lima) — actualización 42
+
+## Sesión 2026-10-06 — GitHub desde la app (PRs abiertos, nada desplegado)
+
+- **[ADR 0022](docs/adr/0022-github-clonar-ramas-y-push-desde-la-app.md):** clonar repos al disco de la terminal de un proyecto (sin tope de archivos), ver estado y ramas, actualizar (solo ff) y subir cambios a una rama NUEVA con aprobación (`pushGithubBranch`: confirm + humanDecision). Todo git corre en el Executor; el token nunca sale de ahí.
+- **PRs:** Executor#37, Core#75 (cambio de HITL en `registry.ts`: revisar), iOS#21, Docs (este). **Apagado** hasta que existan las claves de la GitHub App.
+- **Pendiente del owner:** crear la GitHub App, instalarla, y guardar `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY` (+ `GITHUB_DEMOS_REPO`) en Infisical con lectura para el Executor.
+- **No construido:** graduar/restaurar demos, Subir a GitHub desde Proyectos respaldados, pull requests. Sin probar contra GitHub real.
+- También hoy: respaldos de proyectos (ADR 0021) desplegados; pérdida de proyectos por archivo ilegible corregida (iOS#19); opciones de Publicar genéricas (iOS#20).
 
 ## Sesión 2026-10-05 — rediseño de proyectos del editor (PRs abiertos, sin desplegar)
 
